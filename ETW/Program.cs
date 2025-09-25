@@ -86,7 +86,7 @@ namespace CursorProcessTree
                 return;
             }
 
-            logWriter = new StreamWriter(logPath, true, System.Text.Encoding.UTF8) { AutoFlush = true };
+            logWriter = new StreamWriter(logPath, false, System.Text.Encoding.UTF8) { AutoFlush = true };
 
             using var session = new TraceEventSession("ProcessTreeSession");
             session.EnableKernelProvider(
@@ -168,7 +168,43 @@ namespace CursorProcessTree
                 catch { }
             };
 
-            // --- File Write/Delete ---
+            // --- File Create/Open ---
+            session.Source.Kernel.FileIOCreate += data =>
+            {
+                if (!IsChildOfTarget(data.ProcessID)) return;
+
+                string eventType = "[OPEN/CREATE]";
+                try
+                {
+                    object dispObj = null;
+                    if (data.PayloadNames.Contains("CreateDisposition"))
+                        dispObj = data.PayloadByName("CreateDisposition");
+                    else if (data.PayloadNames.Contains("Disposition"))
+                        dispObj = data.PayloadByName("Disposition");
+
+                    if (dispObj != null)
+                    {
+                        uint disp = Convert.ToUInt32(dispObj);
+                        switch (disp)
+                        {
+                            case 0: eventType = "[CREATE]"; break;
+                            case 1: eventType = "[OPEN]"; break;
+                            case 2: eventType = "[CREATE]"; break;
+                            case 3: eventType = "[OPEN_IF]"; break;
+                            case 4: eventType = "[OVERWRITE]"; break;
+                            case 5: eventType = "[TRUNCATE]"; break;
+                            default: eventType = $"[OPEN/CREATE:{disp}]"; break;
+                        }
+                    }
+                }
+                catch { }
+
+                HandleFileEvent(eventType, data.ProcessID, data.FileName);
+            };
+
+            // --- File Read / Write / Delete ---
+            session.Source.Kernel.FileIORead += data =>
+                HandleFileEvent("[READ]", data.ProcessID, data.FileName);
             session.Source.Kernel.FileIOWrite += data =>
                 HandleFileEvent("[WRITE]", data.ProcessID, data.FileName);
             session.Source.Kernel.FileIOFileDelete += data =>
@@ -185,6 +221,11 @@ namespace CursorProcessTree
 
                 if (fk != 0 && fileKeyPath.TryGetValue(fk, out var prev))
                     oldPath = prev;
+
+                // 자기 자신의 로그 파일 rename 이벤트 제외
+                if (string.Equals(newPath, logPath, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(oldPath, logPath, StringComparison.OrdinalIgnoreCase))
+                    return;
 
                 if (IsPathExcluded(oldPath) || IsPathExcluded(newPath)) return;
 
@@ -248,6 +289,11 @@ namespace CursorProcessTree
             string normPath = path.Replace('/', '\\');
             string fileName = Path.GetFileName(normPath);
 
+            // 자기 자신의 로그 파일은 제외
+            if (string.Equals(normPath, logPath, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // MCP 로그 파일 (.log 이름 안에 "MCP" 포함) 체크
             bool isMcpLog = fileName.EndsWith(".log", StringComparison.OrdinalIgnoreCase) &&
                             fileName.IndexOf("MCP", StringComparison.OrdinalIgnoreCase) >= 0;
 
@@ -288,14 +334,18 @@ namespace CursorProcessTree
                 }
             }
 
-            int indent = GetIndentLevel(pid);
-            string spaces = new string(' ', indent * 2);
-
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"{spaces}{eventType} File {normPath} (PID={pid})");
-            Console.ResetColor();
-
+            // --- 로그 파일에는 모든 이벤트 기록 ---
             LogLine($"{eventType} File {normPath} (PID={pid})");
+
+            if (eventType == "[WRITE]" || eventType == "[DELETE]" || eventType.StartsWith("[RENAME]"))
+            {
+                int indent = GetIndentLevel(pid);
+                string spaces = new string(' ', indent * 2);
+
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"{spaces}{eventType} File {normPath} (PID={pid})");
+                Console.ResetColor();
+            }
         }
 
         static void HandleNetworkEvent(string eventType, int pid, dynamic data)
