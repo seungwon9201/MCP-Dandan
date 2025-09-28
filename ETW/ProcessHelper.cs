@@ -15,8 +15,12 @@ namespace ETW
                 ProcessTracker.TrackedPids[p.Id] = p.ProcessName + ".exe";
                 string cmd = TryGetCommandLineForPid(p.Id);
                 ProcessTracker.ProcCmdline[p.Id] = McpHelper.TagFromCommandLine(cmd);
+
+                // 런타임 추정 추가
+                string runtime = GuessRuntime(p.ProcessName + ".exe", cmd);
+
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[INIT] Found running PID={p.Id} {p.ProcessName}.exe CMD={cmd}");
+                Console.WriteLine($"[INIT] Found running PID={p.Id} {p.ProcessName}.exe Runtime={runtime} CMD={cmd}");
                 Console.ResetColor();
             }
         }
@@ -32,6 +36,26 @@ namespace ETW
             }
             catch { }
             return null;
+        }
+
+        /// <summary>
+        /// 실행 파일명/명령줄 기반으로 런타임(Node.js, Python, Go, Rust 등) 추정
+        /// </summary>
+        public static string GuessRuntime(string imageFileName, string cmdline)
+        {
+            string lowerImg = imageFileName?.ToLowerInvariant() ?? "";
+            string lowerCmd = cmdline?.ToLowerInvariant() ?? "";
+
+            if (lowerImg.EndsWith("node.exe") || lowerCmd.Contains("node"))
+                return "Node.js";
+            if (lowerImg.EndsWith("python.exe") || lowerImg.EndsWith("python") || lowerCmd.Contains("python"))
+                return "Python";
+            if (lowerImg.Contains("go") || lowerCmd.Contains("go run"))
+                return "Go";
+            if (lowerImg.Contains("rust") || lowerCmd.Contains("cargo"))
+                return "Rust";
+
+            return "Unknown";
         }
     }
 }
