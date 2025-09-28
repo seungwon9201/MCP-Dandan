@@ -144,6 +144,7 @@
     <Compile Include="McpHelper.cs" />
     <Compile Include="ProcessEventRegistrar.cs" />
     <Compile Include="ProcessHelper.cs" />
+    <Compile Include="ProcessInspector.cs" />
     <Compile Include="ProcessTracker.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
