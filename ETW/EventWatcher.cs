@@ -19,6 +19,7 @@ namespace ETW
         public static void RunEtw(ManualResetEventSlim stopEvt)
         {
             const string sessionName = "TargetedWatcherSession";
+
             try
             {
                 foreach (var s in TraceEventSession.GetActiveSessionNames())
@@ -31,7 +32,10 @@ namespace ETW
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] Failed to clean old session: {ex.GetType().Name} - {ex.Message}");
+            }
 
             using var session = new TraceEventSession(sessionName);
 
@@ -42,20 +46,60 @@ namespace ETW
                 KernelTraceEventParser.Keywords.DiskIO |
                 KernelTraceEventParser.Keywords.NetworkTCPIP;
 
-            session.EnableKernelProvider(keywords);
-            session.EnableProvider("Microsoft-Windows-Kernel-File", Microsoft.Diagnostics.Tracing.TraceEventLevel.Verbose, ulong.MaxValue);
+            try
+            {
+                session.EnableKernelProvider(keywords);
+                session.EnableProvider("Microsoft-Windows-Kernel-File", Microsoft.Diagnostics.Tracing.TraceEventLevel.Verbose, ulong.MaxValue);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Kernel provider attach failed: {ex.GetType().Name} - {ex.Message}");
+            }
 
             foreach (var p in NetProviders)
-                try { session.EnableProvider(p); } catch { }
+            {
+                try
+                {
+                    session.EnableProvider(p);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[WARN] NetProvider {p} attach failed: {ex.GetType().Name} - {ex.Message}");
+                }
+            }
 
-            try { session.EnableProvider("Microsoft-Windows-NamedPipe"); }
-            catch { }
+            try
+            {
+                session.EnableProvider("Microsoft-Windows-NamedPipe");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARN] NamedPipe provider attach failed: {ex.GetType().Name} - {ex.Message}");
+            }
 
             var source = session.Source;
-            ProcessEventRegistrar.Register(source);
+
+            try
+            {
+                ProcessEventRegistrar.Register(source);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ERROR] Registrar registration failed: {ex.GetType().Name} - {ex.Message}");
+            }
 
             Console.WriteLine("[*] ETW session started. Monitoring...");
-            source.Process();
+
+            try
+            {
+                source.Process(); // 원래 여기서 죽음 → try/catch로 보호
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[ETW ERROR] {ex.GetType().Name}: {ex.Message}");
+                Console.ResetColor();
+            }
         }
     }
 }
