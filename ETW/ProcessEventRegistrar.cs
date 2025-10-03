@@ -47,7 +47,6 @@ namespace ETW
                     Console.Out.WriteLine($"[MCP CHILD] PID={ev.ProcessID} Parent={ev.ParentID} Runtime={runtime} {ev.ImageFileName} CMD={cmdline}");
                     Console.ResetColor();
 
-                    // 🔥 변경된 부분: 하드코딩 매핑 제거 → 자동 추출
                     string mcpName = McpHelper.ExtractMcpFromCmd(cmdline);
 
                     if (string.IsNullOrEmpty(mcpName))
@@ -91,7 +90,6 @@ namespace ETW
                     Console.Out.WriteLine($"[PROC STOP] PID={ev.ProcessID}");
                     Console.ResetColor();
 
-                    // 🔥 변경된 부분: 하드코딩 매핑 제거 → 자동 추출
                     string mcpName = McpHelper.ExtractMcpFromCmd(lastCmd);
                     if (!string.IsNullOrEmpty(mcpName))
                     {
@@ -121,7 +119,7 @@ namespace ETW
             source.Kernel.FileIOClose += ev => { if (ProcessTracker.TrackedPids.ContainsKey(ev.ProcessID)) FileEventHandler.LogEvent("CLOSE", ev.ProcessID, ev.FileName, ev.FileKey); };
 
             // -------------------------------
-            // 네트워크 이벤트 (Host 출력 제거)
+            // 네트워크 이벤트
             // -------------------------------
             source.Kernel.TcpIpConnect += ev =>
             {
@@ -175,8 +173,6 @@ namespace ETW
                 Console.Out.WriteLine($"    └─ <- {ev.saddr}:{ev.sport} Bytes={ev.size}");
                 Console.ResetColor();
             };
-
-            // (DNS / WinHTTP / WinINet / TLS / QUIC 부분은 그대로 유지)
         }
 
         static string ShortPath(string path) => string.IsNullOrEmpty(path) ? "" : Path.GetFileName(path);

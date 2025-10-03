@@ -16,11 +16,11 @@ namespace ETW
                 string cmd = TryGetCommandLineForPid(p.Id);
                 ProcessTracker.ProcCmdline[p.Id] = McpHelper.TagFromCommandLine(cmd);
 
-                // 런타임 추정 추가
+                // runtime 추정은 유지하되 출력에서는 제거
                 string runtime = GuessRuntime(p.ProcessName + ".exe", cmd);
 
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"[INIT] Found running PID={p.Id} {p.ProcessName}.exe Runtime={runtime} CMD={cmd}");
+                Console.WriteLine($"[INIT] Found running PID={p.Id} {p.ProcessName}.exe CMD={cmd}");
                 Console.ResetColor();
             }
         }
@@ -38,9 +38,6 @@ namespace ETW
             return null;
         }
 
-        /// <summary>
-        /// 실행 파일명/명령줄 기반으로 런타임(Node.js, Python, Go, Rust 등) 추정
-        /// </summary>
         public static string GuessRuntime(string imageFileName, string cmdline)
         {
             string lowerImg = imageFileName?.ToLowerInvariant() ?? "";
