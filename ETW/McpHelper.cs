@@ -10,20 +10,12 @@ namespace ETW
         // PID → MCP 이름 캐시
         private static readonly Dictionary<int, string> McpMap = new();
 
-        /// <summary>
-        /// 네트워크 이벤트에서 MCP 추정
-        /// </summary>
+
+        // 네트워크 이벤트에서 MCP 추정
         public static string DetermineMcpForNetwork(int pid, string ip, int port)
         {
             if (IPAddress.TryParse(ip, out var addr) && IPAddress.IsLoopback(addr))
             {
-                // 이미 태그에 Local MCP 이름이 있으면 재사용
-                if (ProcessTracker.ProcCmdline.TryGetValue(pid, out var existingTag))
-                {
-                    var local = ExtractLocalMcpFromTag(existingTag);
-                    if (!string.IsNullOrEmpty(local)) return local;
-                }
-
                 // 커맨드라인에서 추출
                 string cmd = ProcessHelper.TryGetCommandLineForPid(pid);
                 if (!string.IsNullOrEmpty(cmd))
@@ -31,23 +23,16 @@ namespace ETW
                     var byCmd = ExtractMcpFromCmd(cmd);
                     if (!string.IsNullOrEmpty(byCmd)) return byCmd;
                 }
-                return "local";
             }
             return "unknown";
         }
 
-        /// <summary>
-        /// [MCP MAP] 라인에서 직접 등록 (PID → Name)
-        /// </summary>
         public static void RegisterMcp(int pid, string name)
         {
             if (!string.IsNullOrEmpty(name))
                 McpMap[pid] = name;
         }
 
-        /// <summary>
-        /// MCP 이름 결정 (PID/CommandLine/Path 기반)
-        /// </summary>
         public static string DetermineMcp(int pid, string cmd, string path)
         {
             // 1) 캐시된 것 있으면 그대로
@@ -104,31 +89,6 @@ namespace ETW
             return "unknown";
         }
 
-        /// <summary>
-        /// "(Local MCP: xxx)" 문자열에서 xxx 추출
-        /// </summary>
-        public static string ExtractLocalMcpFromTag(string tag)
-        {
-            if (string.IsNullOrEmpty(tag)) return null;
-            var lower = tag.ToLowerInvariant();
-            if (lower.Contains("(local mcp:"))
-            {
-                int s = lower.IndexOf("(local mcp:");
-                int e = lower.IndexOf(')', s);
-                if (s >= 0 && e > s)
-                {
-                    return tag.Substring(
-                        s + "(Local MCP:".Length,
-                        e - s - "(Local MCP:".Length
-                    ).Trim().Trim(':', ' ');
-                }
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Claude Extensions 경로에서 MCP 이름 추출
-        /// </summary>
         public static string ExtractMcpFromPath(string path)
         {
             if (string.IsNullOrEmpty(path)) return null;
@@ -143,9 +103,6 @@ namespace ETW
             return null;
         }
 
-        /// <summary>
-        /// --mcp=xxx 옵션에서 MCP 이름 추출
-        /// </summary>
         public static string ExtractMcpFromCmd(string cmd)
         {
             if (string.IsNullOrEmpty(cmd)) return null;
@@ -158,14 +115,12 @@ namespace ETW
             return null;
         }
 
-        /// <summary>
-        /// 로그에 출력될 MCP 태그 (CommandLine 포함)
-        /// </summary>
         public static string TagFromCommandLine(string cmd)
         {
             if (string.IsNullOrEmpty(cmd)) return "<no-cmd>";
+
             var mapped = ExtractMcpFromCmd(cmd);
-            if (!string.IsNullOrEmpty(mapped)) return $"(Local MCP: {mapped}) {TruncateCmd(cmd)}";
+            if (!string.IsNullOrEmpty(mapped)) return TruncateCmd(cmd);
 
             string lower = cmd.ToLowerInvariant();
             if (lower.Contains("--type=utility")) return $"(UtilityProcess) {TruncateCmd(cmd)}";
@@ -174,9 +129,6 @@ namespace ETW
             return TruncateCmd(cmd);
         }
 
-        /// <summary>
-        /// 긴 CommandLine 줄임
-        /// </summary>
         public static string TruncateCmd(string cmd, int max = 120)
         {
             if (string.IsNullOrEmpty(cmd)) return "<no-cmd>";

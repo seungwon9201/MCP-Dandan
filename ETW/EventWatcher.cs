@@ -9,9 +9,6 @@ namespace ETW
     {
         private static readonly string[] NetProviders = new[]
         {
-            "Microsoft-Windows-WinINet",
-            "Microsoft-Windows-WinHTTP",
-            "Microsoft-Windows-DNS-Client",
             "Microsoft-Windows-TCPIP",
             "Microsoft-Windows-Kernel-Network",
         };
@@ -56,7 +53,7 @@ namespace ETW
                 Console.WriteLine($"[ERROR] Kernel provider attach failed: {ex.GetType().Name} - {ex.Message}");
             }
 
-            // 기본 네트워크 관련 프로바이더
+            // 실제 유효한 네트워크 관련 프로바이더만 등록
             foreach (var p in NetProviders)
             {
                 try
@@ -68,38 +65,6 @@ namespace ETW
                 {
                     Console.WriteLine($"[WARN] NetProvider {p} attach failed: {ex.GetType().Name} - {ex.Message}");
                 }
-            }
-
-            // NamedPipe
-            try
-            {
-                session.EnableProvider("Microsoft-Windows-NamedPipe", Microsoft.Diagnostics.Tracing.TraceEventLevel.Informational, ulong.MaxValue);
-                Console.WriteLine("[+] NamedPipe provider enabled");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[WARN] NamedPipe provider attach failed: {ex.GetType().Name} - {ex.Message}");
-            }
-
-            // --- 추가 프로바이더들 ---
-            try
-            {
-                session.EnableProvider("Microsoft-Windows-Schannel", Microsoft.Diagnostics.Tracing.TraceEventLevel.Informational, ulong.MaxValue);
-                Console.WriteLine("[+] Schannel provider enabled (TLS handshake/SNI)");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[WARN] Schannel provider attach failed: {ex.GetType().Name} - {ex.Message}");
-            }
-
-            try
-            {
-                session.EnableProvider("Microsoft-Quic", Microsoft.Diagnostics.Tracing.TraceEventLevel.Informational, ulong.MaxValue);
-                Console.WriteLine("[+] MsQuic provider enabled (QUIC/HTTP3)");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[WARN] MsQuic provider attach failed: {ex.GetType().Name} - {ex.Message}");
             }
 
             var source = session.Source;

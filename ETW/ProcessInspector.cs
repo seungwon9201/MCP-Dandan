@@ -176,7 +176,6 @@ namespace ETW
                 }
             }
 
-            // 🔥 포트 → PID 역매핑 함수
             public static int FindPidByLocalPort(int port)
             {
                 int AF_INET = 2;
