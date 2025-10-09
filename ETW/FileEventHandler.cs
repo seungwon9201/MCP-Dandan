@@ -90,7 +90,7 @@ namespace ETW
 
                 string jsonString = System.Text.Json.JsonSerializer.Serialize(json, new System.Text.Json.JsonSerializerOptions
                 {
-                    WriteIndented = true
+                    WriteIndented = false
                 });
                 Console.WriteLine(jsonString);
             }

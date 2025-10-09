@@ -38,7 +38,7 @@ namespace ETW
                 }
             };
 
-            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = false });
         }
 
         // Builds the payload for Process events (Start/Stop)
@@ -118,9 +118,13 @@ namespace ETW
         {
             var rawBytes = (byte[])data.PayloadByName("data");
             string decoded = Encoding.UTF8.GetString(rawBytes);
+
+            bool isRecv = (bool)data.PayloadByName("task");  
+            string task = isRecv ? "SEND" : "RECV"; //0:recv 1:send
+
             return new
             {
-                task = "Hard Code merong",
+                task = task,
                 transport = "stdio", //TODO: This is hard coding
                 src = data.PayloadByName("SrcPid"),
                 messsage = decoded
