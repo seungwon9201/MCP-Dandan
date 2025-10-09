@@ -1,4 +1,5 @@
 ﻿using Microsoft.Diagnostics.Tracing;
+using Microsoft.Diagnostics.Tracing.Parsers;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using System;
 using System.IO;
@@ -30,6 +31,9 @@ namespace ETW
                     Console.Out.WriteLine($"[PROC START] PID={ev.ProcessID} Runtime={runtime} {ev.ImageFileName} CMD={cmdline}");
                     Console.ResetColor();
 
+                    // JSON 출력
+                    Console.WriteLine(EventDataFormatter.ToStandardJson(ev, "Process"));
+
                     Console.ForegroundColor = ConsoleColor.Green;
                     Console.Out.WriteLine("    ├─ Image=" + ShortPath(ev.ImageFileName));
                     PrintWrapped("    └─ CMD", cmdline);
@@ -46,6 +50,9 @@ namespace ETW
                     Console.ForegroundColor = ConsoleColor.Cyan;
                     Console.Out.WriteLine($"[MCP CHILD] PID={ev.ProcessID} Parent={ev.ParentID} Runtime={runtime} {ev.ImageFileName} CMD={cmdline}");
                     Console.ResetColor();
+
+                    // JSON 출력
+                    Console.WriteLine(EventDataFormatter.ToStandardJson(ev, "Process"));
 
                     string mcpName = McpHelper.ExtractMcpFromCmd(cmdline);
 
@@ -90,6 +97,9 @@ namespace ETW
                     Console.Out.WriteLine($"[PROC STOP] PID={ev.ProcessID}");
                     Console.ResetColor();
 
+                    // JSON 출력
+                    Console.WriteLine(EventDataFormatter.ToStandardJson(ev, "Process"));
+
                     string mcpName = McpHelper.ExtractMcpFromCmd(lastCmd);
                     if (!string.IsNullOrEmpty(mcpName))
                     {
@@ -108,7 +118,7 @@ namespace ETW
             };
 
             // -------------------------------
-            // 파일 I/O 이벤트
+            // 파일 I/O 이벤트 (기존 유지)
             // -------------------------------
             source.Kernel.FileIOFileCreate += ev => { if (ProcessTracker.TrackedPids.ContainsKey(ev.ProcessID)) FileEventHandler.LogEvent("CREATE", ev.ProcessID, ev.FileName, ev.FileKey); };
             source.Kernel.FileIOWrite += ev => { if (ProcessTracker.TrackedPids.ContainsKey(ev.ProcessID)) FileEventHandler.LogEvent("WRITE", ev.ProcessID, ev.FileName, ev.FileKey); };
@@ -132,6 +142,9 @@ namespace ETW
                 Console.Out.WriteLine($"[NET-CONNECT] PID={ev.ProcessID} MCP={mcp} -> {ev.daddr}:{ev.dport}");
                 Console.ResetColor();
 
+                // JSON 출력
+                Console.WriteLine(EventDataFormatter.ToStandardJson(ev, "Network"));
+
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.Out.WriteLine($"    ├─ Image={ShortPath(img)}");
                 if (!string.IsNullOrEmpty(ev.saddr?.ToString()))
@@ -143,36 +156,54 @@ namespace ETW
             source.Kernel.TcpIpSend += ev =>
             {
                 if (!ProcessTracker.TrackedPids.ContainsKey(ev.ProcessID)) return;
-
-                string mcp = ProcessTracker.ProcCmdline.TryGetValue(ev.ProcessID, out var m) ? m : "";
-                string img = ProcessTracker.TrackedPids.TryGetValue(ev.ProcessID, out var imgPath) ? imgPath : "";
-
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Out.WriteLine($"[NET-SEND] PID={ev.ProcessID} MCP={mcp} -> {ev.daddr}:{ev.dport} Bytes={ev.size}");
-                Console.ResetColor();
-
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Out.WriteLine($"    ├─ Image={ShortPath(img)}");
-                Console.Out.WriteLine($"    └─ -> {ev.daddr}:{ev.dport} Bytes={ev.size}");
-                Console.ResetColor();
+                Console.WriteLine(EventDataFormatter.ToStandardJson(ev, "Network")); // JSON 출력
             };
 
             source.Kernel.TcpIpRecv += ev =>
             {
                 if (!ProcessTracker.TrackedPids.ContainsKey(ev.ProcessID)) return;
-
-                string mcp = ProcessTracker.ProcCmdline.TryGetValue(ev.ProcessID, out var m) ? m : "";
-                string img = ProcessTracker.TrackedPids.TryGetValue(ev.ProcessID, out var imgPath) ? imgPath : "";
-
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Out.WriteLine($"[NET-RECV] PID={ev.ProcessID} MCP={mcp} <- {ev.saddr}:{ev.sport} Bytes={ev.size}");
-                Console.ResetColor();
-
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.Out.WriteLine($"    ├─ Image={ShortPath(img)}");
-                Console.Out.WriteLine($"    └─ <- {ev.saddr}:{ev.sport} Bytes={ev.size}");
-                Console.ResetColor();
+                Console.WriteLine(EventDataFormatter.ToStandardJson(ev, "Network")); // JSON 출력
             };
+
+            // -------------------------------
+            // Local Mcp Server IPC 이벤트 
+            // -------------------------------
+            if (source is ETWTraceEventSource etwSource)
+            {
+                var parser = new DynamicTraceEventParser(etwSource);
+
+                parser.All += data =>
+                {
+                    // LocalMcpServerIpcGuid == "7d38387a-bf0b-4dcf-8d8e-b8558542d874"
+                    if (data.ProviderGuid == new Guid("7d38387a-bf0b-4dcf-8d8e-b8558542d874"))
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkGreen;
+                        Console.WriteLine($"[Local Mcp Server Ipc] {data.ProviderName}.{data.EventName}");
+
+                        foreach (var name in data.PayloadNames)
+                        {
+                            object value = data.PayloadByName(name);
+
+                            // 바이너리 필드 디코딩
+                            if (name == "data" && value is byte[] bytes)
+                            {
+                                string decoded = System.Text.Encoding.UTF8.GetString(bytes);
+                                Console.WriteLine($"    ├─ {name}  = {decoded}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"    ├─ {name} = {value}");
+                            }
+                        }
+
+                        Console.ResetColor();
+
+                        //JSON 출력
+                        Console.WriteLine(EventDataFormatter.ToStandardJson(data, "MCP")); // JSON 출력
+                    }
+
+                };
+            }
         }
 
         static string ShortPath(string path) => string.IsNullOrEmpty(path) ? "" : Path.GetFileName(path);

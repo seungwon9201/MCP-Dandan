@@ -15,7 +15,6 @@ namespace ETW
 
             path = SanitizePath(path);
 
-            // --- 통합 필터 적용 ---
             int repeatCount;
             if (EtwFilters.ShouldIgnore(kind, pid, path, out repeatCount))
                 return;
@@ -43,26 +42,22 @@ namespace ETW
                 ProcessTracker.ProcCmdline[pid] = mcpName;
             }
 
-            // 색상 선택
-            ConsoleColor color;
-            if (!string.IsNullOrEmpty(mcpName))
-                color = ConsoleColor.Magenta;
-            else
+            // 콘솔 색상
+            ConsoleColor color = !string.IsNullOrEmpty(mcpName) ? ConsoleColor.Magenta : kind.ToUpperInvariant() switch
             {
-                switch (kind.ToUpperInvariant())
-                {
-                    case "CREATE": color = ConsoleColor.Cyan; break;
-                    case "WRITE": color = ConsoleColor.Cyan; break;
-                    case "READ": color = ConsoleColor.Green; break;
-                    case "DIRENUM":
-                    case "RENAME": color = ConsoleColor.DarkYellow; break;
-                    case "DELETE": color = ConsoleColor.Red; break;
-                    case "CLOSE": color = ConsoleColor.DarkGray; break;
-                    default: color = ConsoleColor.Gray; break;
-                }
-            }
+                "CREATE" => ConsoleColor.Cyan,
+                "WRITE" => ConsoleColor.Cyan,
+                "READ" => ConsoleColor.Green,
+                "DIRENUM" => ConsoleColor.DarkYellow,
+                "RENAME" => ConsoleColor.DarkYellow,
+                "DELETE" => ConsoleColor.Red,
+                "CLOSE" => ConsoleColor.DarkGray,
+                _ => ConsoleColor.Gray
+            };
 
-            // 출력
+            // ────────────────────────────────
+            // 콘솔 로그 출력
+            // ────────────────────────────────
             Console.ForegroundColor = color;
             Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] [{kind}] PID={pid} PATH={path}");
             if (repeatCount > 0)
@@ -72,12 +67,47 @@ namespace ETW
                 Console.WriteLine($"   └─ [MCP] {mcpName}");
             Console.ResetColor();
 
-            // data_* 파일 요약
+            // ────────────────────────────────
+            // JSON 형식 출력
+            // ────────────────────────────────
+            try
+            {
+                var json = new
+                {
+                    ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000,
+                    producer = "agent-core",
+                    pid = pid,
+                    pname = ProcessTracker.TrackedPids.TryGetValue(pid, out var pName) ? pName : "<unknown>",
+                    eventType = "File",
+                    data = new
+                    {
+                        task = kind,
+                        pid = pid,
+                        filePath = path,
+                        mcpTag = mcpName
+                    }
+                };
+
+                string jsonString = System.Text.Json.JsonSerializer.Serialize(json, new System.Text.Json.JsonSerializerOptions
+                {
+                    WriteIndented = false
+                });
+                Console.WriteLine(jsonString);
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"[JSON ERROR] {ex.Message}");
+                Console.ResetColor();
+            }
+
+            // ────────────────────────────────
+            // 파일 내용 덤프
+            // ────────────────────────────────
             string fileName = Path.GetFileName(path).ToLowerInvariant();
             if (fileName.StartsWith("data_"))
                 return;
 
-            // 파일 내용 덤프
             if ((kind.Equals("WRITE", StringComparison.OrdinalIgnoreCase) ||
                  kind.Equals("READ", StringComparison.OrdinalIgnoreCase)) &&
                 ShouldDumpContents(ext))
@@ -115,13 +145,13 @@ namespace ETW
             {
                 if (!File.Exists(path)) return;
                 using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                long fileLen = fs.Length;
-                if (fileLen == 0) return;
+                long len = fs.Length;
+                if (len == 0) return;
 
-                long toReadFrom = Math.Max(0, fileLen - MAX_READ_BYTES);
-                fs.Seek(toReadFrom, SeekOrigin.Begin);
+                long from = Math.Max(0, len - MAX_READ_BYTES);
+                fs.Seek(from, SeekOrigin.Begin);
 
-                byte[] buf = new byte[fileLen - toReadFrom];
+                byte[] buf = new byte[len - from];
                 int read = fs.Read(buf, 0, buf.Length);
 
                 Console.ForegroundColor = ConsoleColor.DarkGray;

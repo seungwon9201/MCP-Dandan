@@ -139,6 +139,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="EtwFilter.cs" />
+    <Compile Include="EventDataFormatter.cs" />
     <Compile Include="EventWatcher.cs" />
     <Compile Include="FileEventHandler.cs" />
     <Compile Include="LogWatcher.cs" />
