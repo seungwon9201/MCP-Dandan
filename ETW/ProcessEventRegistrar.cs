@@ -23,7 +23,11 @@ namespace ETW
                     // Claude 메인 프로세스
                     ProcessTracker.RootPid = ev.ProcessID;
                     ProcessTracker.TrackedPids[ev.ProcessID] = ev.ImageFileName;
-                    ProcessTracker.ProcCmdline[ev.ProcessID] = McpHelper.TagFromCommandLine(cmdline);
+
+                    // MCP 태그 정규화 추가
+                    var rawTag = McpHelper.TagFromCommandLine(cmdline);
+                    var canonical = McpHelper.CanonicalizeMcpTag(rawTag, ev.ImageFileName, cmdline);
+                    ProcessTracker.ProcCmdline[ev.ProcessID] = canonical;
 
                     string runtime = ProcessHelper.GuessRuntime(ev.ImageFileName, cmdline);
 
@@ -43,7 +47,11 @@ namespace ETW
                 {
                     // Claude 자손 프로세스
                     ProcessTracker.TrackedPids[ev.ProcessID] = ev.ImageFileName;
-                    ProcessTracker.ProcCmdline[ev.ProcessID] = McpHelper.TagFromCommandLine(cmdline);
+
+                    //MCP 태그 정규화 추가
+                    var rawTag = McpHelper.TagFromCommandLine(cmdline);
+                    var canonical = McpHelper.CanonicalizeMcpTag(rawTag, ev.ImageFileName, cmdline);
+                    ProcessTracker.ProcCmdline[ev.ProcessID] = canonical;
 
                     string runtime = ProcessHelper.GuessRuntime(ev.ImageFileName, cmdline);
 
