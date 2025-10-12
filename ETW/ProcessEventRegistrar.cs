@@ -29,6 +29,8 @@ namespace ETW
                     var canonical = McpHelper.CanonicalizeMcpTag(rawTag, ev.ImageFileName, cmdline);
                     ProcessTracker.ProcCmdline[ev.ProcessID] = canonical;
 
+                    ProcessTracker.LastResolvedHostByPid[ev.ProcessID] = cmdline;
+
                     string runtime = ProcessHelper.GuessRuntime(ev.ImageFileName, cmdline);
 
                     Console.ForegroundColor = ConsoleColor.Green;
@@ -51,6 +53,8 @@ namespace ETW
                     var rawTag = McpHelper.TagFromCommandLine(cmdline);
                     var canonical = McpHelper.CanonicalizeMcpTag(rawTag, ev.ImageFileName, cmdline);
                     ProcessTracker.ProcCmdline[ev.ProcessID] = canonical;
+
+                    ProcessTracker.LastResolvedHostByPid[ev.ProcessID] = cmdline;
 
                     string runtime = ProcessHelper.GuessRuntime(ev.ImageFileName, cmdline);
 
@@ -94,8 +98,8 @@ namespace ETW
             {
                 if (ProcessTracker.TrackedPids.TryRemove(ev.ProcessID, out _))
                 {
-                    ProcessTracker.ProcCmdline.TryRemove(ev.ProcessID, out var lastCmd);
-                    ProcessTracker.LastResolvedHostByPid.TryRemove(ev.ProcessID, out _);
+                    ProcessTracker.ProcCmdline.TryRemove(ev.ProcessID, out _);
+                    ProcessTracker.LastResolvedHostByPid.TryRemove(ev.ProcessID, out var lastCmd);
 
                     if (ev.ProcessID == ProcessTracker.RootPid)
                         ProcessTracker.RootPid = -1;
