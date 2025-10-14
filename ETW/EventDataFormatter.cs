@@ -127,7 +127,7 @@ namespace ETW
                 task = task,
                 transport = "stdio", //TODO: This is hard coding
                 src = data.PayloadByName("SrcPid"),
-                messsage = decoded
+                message = decoded
             };
         }
     }
