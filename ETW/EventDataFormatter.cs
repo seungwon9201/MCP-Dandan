@@ -174,9 +174,9 @@ namespace ETW
             return new
             {
                 task = task,
-                transport = "stdio",
-                src = data.PayloadNames.Contains("SrcPid") ? data.PayloadByName("SrcPid") : null,
-                messsage = decoded
+                transport = "stdio", //TODO: This is hard coding
+                src = data.PayloadByName("SrcPid"),
+                message = decoded
             };
         }
     }
