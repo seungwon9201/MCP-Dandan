@@ -209,6 +209,19 @@ public static class MCPRegistry
             Console.WriteLine($"[INFO] Registered MCP server by config: PID={pid}, Server='{ServerName}'");
             return SetNameTag(pid, ServerName);
         }
+        // MCP 서버 자동 감지 (Cursor 등에서 /d /s /c 옵션으로 인해 불일치 시)
+        var match = System.Text.RegularExpressions.Regex.Match(
+            cmd,
+            @"@modelcontextprotocol\/server-([a-zA-Z0-9_-]+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
+
+        if (match.Success)
+        {
+            string serverName = match.Groups[1].Value;
+            Console.WriteLine($"[INFO] Registered MCP server by config: PID={pid}, Server='{serverName}'");
+            return SetNameTag(pid, serverName);
+        }
 
         // 2) Config 파일에 매칭되는 것이 없을 경우, MCP Host에 따라 전용 로직 수행
         if (Program.TargetProcName == "claude")
