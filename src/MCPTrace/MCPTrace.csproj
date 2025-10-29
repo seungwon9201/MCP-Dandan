@@ -6,13 +6,6 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
-		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
-		<SelfContained>true</SelfContained>
-		<PublishSingleFile>true</PublishSingleFile>
-		<PublishTrimmed>true</PublishTrimmed>
-		<BaseOutputPath>$(SolutionDir)bin\</BaseOutputPath>
-		<OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
-		<PublishDir>$(OutputPath)win-x64\</PublishDir>
 	</PropertyGroup>
 
 	<ItemGroup>
