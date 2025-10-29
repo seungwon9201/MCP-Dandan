@@ -27,26 +27,16 @@ namespace MCPProxy
         /// </summary>
         private static void InitPipe()
         {
-            // 로그 경로를 Downloads 폴더로 고정
-            string logPath = @"C:\Users\ey896\Downloads\proxy_log.txt";
-
             try
             {
                 var pipe = new NamedPipeClientStream(".", "MCPTracePipe", PipeDirection.Out);
                 pipe.Connect(3000); // 타임아웃 3초
                 pipeWriter = new StreamWriter(pipe) { AutoFlush = true };
-
-                File.AppendAllText(
-                    logPath,
-                    $"{DateTime.Now:HH:mm:ss} Connected to MCPTracePipe{Environment.NewLine}"
-                );
             }
-            catch (Exception ex)
+            catch
             {
-                File.AppendAllText(
-                    logPath,
-                    $"{DateTime.Now:HH:mm:ss} Pipe connect failed: {ex.GetType().Name} - {ex.Message}{Environment.NewLine}"
-                );
+                // Pipe 연결 실패해도 MCPProxy는 독립적으로 동작해야 함
+                pipeWriter = null;
             }
         }
 
@@ -72,13 +62,12 @@ namespace MCPProxy
             targetProcess = new Process { StartInfo = startInfo };
             targetProcess.Start();
 
-            // STDIO 파이프 중계 스레드 시작
+            // STDIO 중계 스레드
             new Thread(ForwardStdin) { IsBackground = true }.Start();
             new Thread(ForwardStdout) { IsBackground = true }.Start();
             new Thread(ForwardStderr) { IsBackground = true }.Start();
 
             targetProcess.WaitForExit();
-
             SendPipeEvent("proxy_exit", $"Process exited with code {targetProcess.ExitCode}");
         }
 
@@ -107,14 +96,13 @@ namespace MCPProxy
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
-                // STDOUT은 Claude와 JSON-RPC 통신에 사용됨 → 그대로 전달
                 Console.WriteLine(line);
                 SendPipeEvent("server_to_client", line);
             }
         }
 
         /// <summary>
-        /// Target stderr → Proxy stderr (로그), Pipe로도 전달
+        /// Target stderr → Proxy stderr + Pipe 이벤트
         /// </summary>
         private static void ForwardStderr()
         {
@@ -145,7 +133,7 @@ namespace MCPProxy
             }
             catch
             {
-                // Pipe 끊겨도 무시
+                // Pipe 끊겨도 조용히 무시
             }
         }
     }

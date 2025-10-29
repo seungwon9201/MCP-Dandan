@@ -23,6 +23,19 @@ public partial class Program
     {
         Console.OutputEncoding = Encoding.UTF8;
 
+        var cts = new CancellationTokenSource();
+
+        // 종료 시 세션 정리 & 정상 종료 처리
+        AppDomain.CurrentDomain.ProcessExit += (s, e) => CleanupETWSessions();
+        Console.CancelKeyPress += (s, e) =>
+        {
+            Console.WriteLine("\n[*] Ctrl+C detected. Stopping ...");
+            cts.Cancel();
+            CleanupETWSessions();
+            e.Cancel = false;
+            Environment.Exit(0);
+        };
+
         Console.WriteLine("=".PadRight(80, '='));
         Console.WriteLine("MCPTrace Agent (ETW Collector)");
         Console.WriteLine("=".PadRight(80, '='));
@@ -40,27 +53,16 @@ public partial class Program
         Console.WriteLine("[+] ETW 수집 및 Proxy 통신 대기 중...");
         Console.WriteLine("Note: 반드시 관리자 권한으로 실행해야 합니다.\n");
 
-        var cts = new CancellationTokenSource();
-
-        // NamedPipe 서버 시작 (Proxy 연결용)
         StartPipeServer(cts.Token);
-
-        // ETW 모니터링 시작
         await Task.Run(() => StartETWMonitoring(cts.Token));
 
         Console.WriteLine("[*] MCPTrace Agent 종료됨.");
     }
 
+
     private static void StartETWMonitoring(CancellationToken cancellationToken)
     {
         using var session = new TraceEventSession("MCPTraceSession_" + Process.GetCurrentProcess().Id);
-
-        Console.CancelKeyPress += (sender, e) =>
-        {
-            e.Cancel = true;
-            Console.WriteLine("\n[*] Ctrl+C pressed. Stopping ETW session...");
-            session.Stop();
-        };
 
         try
         {
@@ -108,6 +110,7 @@ public partial class Program
         Console.WriteLine("[*] ETW session stopped.");
     }
 
+
     // Proxy로부터 로그 받는 NamedPipe 서버 (보안 ACL 적용)
     private static void StartPipeServer(CancellationToken token)
     {
@@ -117,14 +120,12 @@ public partial class Program
             {
                 try
                 {
-                    // 파이프 보안 설정 추가: 모든 사용자 접근 허용
                     var pipeSecurity = new PipeSecurity();
                     pipeSecurity.AddAccessRule(new PipeAccessRule(
-                        new SecurityIdentifier(WellKnownSidType.WorldSid, null), // Everyone
+                        new SecurityIdentifier(WellKnownSidType.WorldSid, null),
                         PipeAccessRights.ReadWrite,
                         AccessControlType.Allow));
 
-                    // .NET 6~9 호환 방식
                     using var server = NamedPipeServerStreamAcl.Create(
                         "MCPTracePipe",
                         PipeDirection.In,
@@ -173,7 +174,7 @@ public partial class Program
         });
     }
 
-    // JSON 메시지 출력
+
     private static void PrintPipeMessage(string raw)
     {
         try
@@ -190,19 +191,41 @@ public partial class Program
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.WriteLine($"[PIPE] Type: {type}, Dir: {direction}");
             Console.ResetColor();
-            Console.WriteLine($"        Data: {TruncateForDisplay(data, 200)}");
+            Console.WriteLine($"        Data: {TruncateForDisplay(data)}");
         }
         catch
         {
             Console.ForegroundColor = ConsoleColor.DarkYellow;
-            Console.WriteLine($"[PIPE RAW] {TruncateForDisplay(raw, 200)}");
+            Console.WriteLine($"[PIPE RAW] {TruncateForDisplay(raw)}");
             Console.ResetColor();
         }
     }
 
     private static string TruncateForDisplay(string text, int maxLength = 200)
     {
-        return text ?? "";
+        if (text == null) return "";
+        if (text.Length <= maxLength) return text;
+        return text.Substring(0, maxLength) + "...";
+    }
+
+
+    private static void CleanupETWSessions()
+    {
+        try
+        {
+            using var s1 = new TraceEventSession("MCPTraceSession_" + Process.GetCurrentProcess().Id, null);
+            s1.Stop();
+        }
+        catch { }
+
+        try
+        {
+            using var s2 = new TraceEventSession("MCPMonitorSession_" + Process.GetCurrentProcess().Id, null);
+            s2.Stop();
+        }
+        catch { }
+
+        Console.WriteLine("[Cleanup] ETW sessions cleaned up.");
     }
 
 }
