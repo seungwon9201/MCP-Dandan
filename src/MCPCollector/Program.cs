@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Collector
@@ -130,14 +131,15 @@ namespace Collector
                 Console.Write($"[{source.ToUpper()}] ");
                 Console.ResetColor();
 
-                // 데이터 출력
+                // 데이터 출력 - 유니코드 디코딩하고 전체 출력
                 if (root.TryGetProperty("data", out var dataElement))
                 {
                     string dataStr = dataElement.ToString();
-                    if (dataStr.Length > 300)
-                    {
-                        dataStr = dataStr.Substring(0, 300) + "...";
-                    }
+
+                    // 유니코드 이스케이프 시퀀스 디코딩 (\u0022 → ")
+                    dataStr = DecodeUnicodeEscapes(dataStr);
+
+                    // 잘라내지 않고 전체 출력
                     Console.WriteLine($"{type}: {dataStr}");
                 }
                 else
@@ -150,6 +152,20 @@ namespace Collector
                 Console.WriteLine($"[RAW #{connectionId}] {json}");
                 logWriter?.WriteLine(json);
             }
+        }
+
+        /// <summary>
+        /// 유니코드 이스케이프 시퀀스를 실제 문자로 디코딩
+        /// \u0022 → "
+        /// \u003C → <
+        /// </summary>
+        static string DecodeUnicodeEscapes(string input)
+        {
+            return Regex.Replace(input, @"\\u([0-9A-Fa-f]{4})", match =>
+            {
+                int codePoint = Convert.ToInt32(match.Groups[1].Value, 16);
+                return ((char)codePoint).ToString();
+            });
         }
     }
 }
