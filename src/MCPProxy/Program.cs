@@ -15,6 +15,7 @@ namespace MCPProxy
         private static TcpClient? collectorClient;
         private static StreamWriter? collectorWriter;
         private static Process? targetProcess;
+        private static readonly object _collectorLock = new object();
 
         public static void Main(string[] args)
         {
@@ -24,21 +25,73 @@ namespace MCPProxy
         }
 
         /// <summary>
-        /// Collector TCP 연결
+        /// Collector TCP 연결 (재시도 로직 포함)
         /// </summary>
         private static void InitCollector()
         {
-            try
-            {
-                collectorClient = new TcpClient();
-                collectorClient.Connect("127.0.0.1", 8888);
+            const int MAX_RETRIES = 5;
+            const int RETRY_DELAY_MS = 1000;
 
-                var stream = collectorClient.GetStream();
-                collectorWriter = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-            }
-            catch
+            for (int i = 0; i < MAX_RETRIES; i++)
             {
-                collectorWriter = null;
+                try
+                {
+                    Console.Error.WriteLine($"[MCPProxy PID={Process.GetCurrentProcess().Id}] Connecting to Collector (attempt {i + 1}/{MAX_RETRIES})...");
+
+                    collectorClient = new TcpClient();
+                    collectorClient.Connect("127.0.0.1", 8888);
+
+                    var stream = collectorClient.GetStream();
+                    collectorWriter = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+
+                    Console.Error.WriteLine($"[MCPProxy PID={Process.GetCurrentProcess().Id}] Connected to Collector ✓");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[MCPProxy] Connection attempt {i + 1} failed: {ex.Message}");
+
+                    if (i < MAX_RETRIES - 1)
+                    {
+                        Thread.Sleep(RETRY_DELAY_MS);
+                    }
+                }
+            }
+
+            Console.Error.WriteLine($"[MCPProxy] Failed to connect to Collector after {MAX_RETRIES} attempts");
+            collectorWriter = null;
+        }
+
+        /// <summary>
+        /// Collector 연결 확인 및 재연결
+        /// </summary>
+        private static bool EnsureCollectorConnection()
+        {
+            lock (_collectorLock)
+            {
+                // 이미 연결되어 있으면 OK
+                if (collectorClient?.Connected == true && collectorWriter != null)
+                    return true;
+
+                // 재연결 시도
+                try
+                {
+                    collectorClient?.Close();
+                    collectorClient = new TcpClient();
+                    collectorClient.Connect("127.0.0.1", 8888);
+
+                    var stream = collectorClient.GetStream();
+                    collectorWriter = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+
+                    Console.Error.WriteLine($"[MCPProxy PID={Process.GetCurrentProcess().Id}] Reconnected to Collector");
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"[MCPProxy PID={Process.GetCurrentProcess().Id}] Reconnection failed: {ex.Message}");
+                    collectorWriter = null;
+                    return false;
+                }
             }
         }
 
@@ -85,7 +138,17 @@ namespace MCPProxy
             {
                 writer.WriteLine(line);
                 writer.Flush();
-                SendToCollector("client_to_server", line);
+
+                // MCP 형식으로 전송 (SEND)
+                try
+                {
+                    var message = JsonSerializer.Deserialize<JsonElement>(line);
+                    SendMCPEvent("SEND", message);
+                }
+                catch
+                {
+                    // JSON이 아니면 무시
+                }
             }
         }
 
@@ -99,7 +162,17 @@ namespace MCPProxy
             while ((line = reader.ReadLine()) != null)
             {
                 Console.WriteLine(line);
-                SendToCollector("server_to_client", line);
+
+                // MCP 형식으로 전송 (RECV)
+                try
+                {
+                    var message = JsonSerializer.Deserialize<JsonElement>(line);
+                    SendMCPEvent("RECV", message);
+                }
+                catch
+                {
+                    // JSON이 아니면 무시
+                }
             }
         }
 
@@ -118,32 +191,87 @@ namespace MCPProxy
         }
 
         /// <summary>
-        /// Collector로 이벤트 전송
+        /// MCP 이벤트를 명세서 형식으로 Collector에 전송
+        /// </summary>
+        private static void SendMCPEvent(string task, JsonElement message)
+        {
+            try
+            {
+                if (targetProcess == null) return;
+
+                // 연결 확인 및 재연결
+                if (!EnsureCollectorConnection()) return;
+
+                // 명세서에 맞는 형식
+                var envelope = new
+                {
+                    ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000, // nanoseconds
+                    producer = "proxy",
+                    pid = targetProcess.Id,
+                    pname = targetProcess.ProcessName,
+                    eventType = "MCP",
+                    data = new
+                    {
+                        task,
+                        transPort = "stdio",
+                        src = task == "SEND" ? "client" : "server",
+                        dst = task == "SEND" ? "server" : "client",
+                        message
+                    }
+                };
+
+                var json = JsonSerializer.Serialize(envelope);
+
+                lock (_collectorLock)
+                {
+                    // 길이 헤더 추가
+                    collectorWriter?.WriteLine($"{json.Length}");
+                    collectorWriter?.WriteLine(json);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[MCPProxy] SendMCPEvent failed: {ex.Message}");
+                collectorWriter = null;
+            }
+        }
+
+        /// <summary>
+        /// 일반 이벤트를 Collector로 전송 (stderr 등)
         /// </summary>
         private static void SendToCollector(string type, string message)
         {
             try
             {
-                if (collectorWriter == null) return;
+                // 연결 확인 및 재연결
+                if (!EnsureCollectorConnection()) return;
 
-                var json = JsonSerializer.Serialize(new
+                var envelope = new
                 {
-                    timestamp = DateTime.UtcNow.ToString("o"),
-                    source = "proxy",
-                    type,
+                    ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000,
+                    producer = "proxy",
+                    pid = targetProcess?.Id ?? 0,
+                    pname = targetProcess?.ProcessName ?? "unknown",
+                    eventType = "ProxyLog",
                     data = new
                     {
-                        pid = targetProcess?.Id ?? 0,
+                        type,
                         message
                     }
-                });
+                };
 
-                // 길이 헤더 추가
-                collectorWriter.WriteLine($"{json.Length}");
-                collectorWriter.WriteLine(json);
+                var json = JsonSerializer.Serialize(envelope);
+
+                lock (_collectorLock)
+                {
+                    // 길이 헤더 추가
+                    collectorWriter?.WriteLine($"{json.Length}");
+                    collectorWriter?.WriteLine(json);
+                }
             }
-            catch
+            catch (Exception ex)
             {
+                Console.Error.WriteLine($"[MCPProxy] SendToCollector failed: {ex.Message}");
                 collectorWriter = null;
             }
         }

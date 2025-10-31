@@ -112,15 +112,42 @@ namespace Collector
                 // 파일에 저장
                 logWriter?.WriteLine(json);
 
-                // 콘솔에 출력
+                // 명세서 형식으로 파싱
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
-                string source = root.GetProperty("source").GetString() ?? "unknown";
-                string type = root.GetProperty("type").GetString() ?? "";
+                // producer 필드 읽기 (없으면 unknown)
+                string producer = "unknown";
+                if (root.TryGetProperty("producer", out var producerElement))
+                {
+                    producer = producerElement.GetString() ?? "unknown";
+                }
 
-                // 색상 지정
-                ConsoleColor color = source switch
+                string eventType = root.GetProperty("eventType").GetString() ?? "";
+
+                // ProxyLog는 간단하게 한 줄로 출력
+                if (eventType == "ProxyLog")
+                {
+                    if (root.TryGetProperty("data", out var dataElement))
+                    {
+                        if (dataElement.TryGetProperty("message", out var msgElement))
+                        {
+                            string msg = msgElement.GetString() ?? "";
+                            // 공백이 많거나 너무 짧은 건 스킵
+                            string trimmed = msg.Trim();
+                            if (trimmed.Length > 10)
+                            {
+                                Console.ForegroundColor = ConsoleColor.DarkGray;
+                                Console.WriteLine($"[PROXY-LOG] {trimmed}");
+                                Console.ResetColor();
+                            }
+                        }
+                    }
+                    return; // ProxyLog는 여기서 종료
+                }
+
+                // 나머지 이벤트는 기존 방식대로
+                ConsoleColor color = producer switch
                 {
                     "etw" => ConsoleColor.Green,
                     "proxy" => ConsoleColor.Cyan,
@@ -129,44 +156,44 @@ namespace Collector
                 };
 
                 Console.ForegroundColor = color;
-                Console.Write($"[{source.ToUpper()}] ");
+                Console.Write($"[{producer.ToUpper()}] ");
                 Console.ResetColor();
 
-                // 데이터 출력 - 유니코드 디코딩하고 전체 출력
-                if (root.TryGetProperty("data", out var dataElement))
+                // eventType 출력
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.Write($"{eventType}: ");
+                Console.ResetColor();
+
+                // 전체 data를 보기 좋게 포맷팅해서 출력
+                if (root.TryGetProperty("data", out var dataElement2))
                 {
-                    string dataStr = dataElement.ToString();
+                    // JSON을 보기 좋게 포맷팅 (들여쓰기)
+                    var options = new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    };
+                    string formattedData = JsonSerializer.Serialize(dataElement2, options);
 
-                    // 유니코드 이스케이프 시퀀스 디코딩 (\u0022 → ")
-                    dataStr = DecodeUnicodeEscapes(dataStr);
-
-                    // 잘라내지 않고 전체 출력
-                    Console.WriteLine($"{type}: {dataStr}");
+                    // 각 줄에 들여쓰기 추가
+                    var lines = formattedData.Split('\n');
+                    foreach (var line in lines)
+                    {
+                        Console.WriteLine(line);
+                    }
                 }
                 else
                 {
-                    Console.WriteLine(type);
+                    Console.WriteLine("(no data)");
                 }
+
+                Console.WriteLine(); // 이벤트 구분을 위한 빈 줄
             }
             catch
             {
                 Console.WriteLine($"[RAW #{connectionId}] {json}");
                 logWriter?.WriteLine(json);
             }
-        }
-
-        /// <summary>
-        /// 유니코드 이스케이프 시퀀스를 실제 문자로 디코딩
-        /// \u0022 → "
-        /// \u003C → <
-        /// </summary>
-        static string DecodeUnicodeEscapes(string input)
-        {
-            return Regex.Replace(input, @"\\u([0-9A-Fa-f]{4})", match =>
-            {
-                int codePoint = Convert.ToInt32(match.Groups[1].Value, 16);
-                return ((char)codePoint).ToString();
-            });
         }
     }
 }

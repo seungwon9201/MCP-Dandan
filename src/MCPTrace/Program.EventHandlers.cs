@@ -45,15 +45,20 @@ public partial class Program
             Console.WriteLine($"└─ MCP Name Tag: '{mcpNameTag}'");
             Console.ResetColor();
 
-            // Collector로 전송
-            SendToCollector("process_start", new
+            // 명세서에 맞는 형식으로 Collector에 전송
+            SendToCollector("Process", new
             {
-                time = data.TimeStamp.ToLocalTime(),
-                name = data.ProcessName,
+                task = "Start",
                 pid = data.ProcessID,
-                parent_pid = data.ParentID,
-                cmdline = data.CommandLine,
-                mcp_tag = mcpNameTag
+                pname = data.ProcessName,
+                parent = new
+                {
+                    pid = data.ParentID,
+                    name = GetParentProcessName(data.ParentID)
+                },
+                imageFilename = data.ImageFileName ?? "",
+                commandLine = data.CommandLine ?? "",
+                mcpTag = mcpNameTag
             });
         }
     }
@@ -70,12 +75,33 @@ public partial class Program
             Console.WriteLine($"[PROCESS Stop] Process stopped: {data.ProcessName} (PID: {data.ProcessID})");
             Console.ResetColor();
 
-            // Collector로 전송
-            SendToCollector("process_stop", new
+            // 명세서에 맞는 형식으로 Collector에 전송
+            SendToCollector("Process", new
             {
-                name = data.ProcessName,
-                pid = data.ProcessID
+                task = "Stop",
+                pid = data.ProcessID,
+                pname = data.ProcessName,
+                parent = new
+                {
+                    pid = data.ParentID,
+                    name = GetParentProcessName(data.ParentID)
+                },
+                imageFilename = data.ImageFileName ?? "",
+                commandLine = ""
             });
+        }
+    }
+
+    private static string GetParentProcessName(int parentPid)
+    {
+        try
+        {
+            var parent = System.Diagnostics.Process.GetProcessById(parentPid);
+            return parent.ProcessName;
+        }
+        catch
+        {
+            return "unknown";
         }
     }
 
