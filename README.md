@@ -1,6 +1,6 @@
-### 82ch-Engine
+## 82ch-Engine (Semantic gap Engine branch)
 
-## Data Flow
+### Data Flow
 ```
 ETW.exe (or 82ch-observer)
     ↓ (stdout, JSON)
@@ -21,7 +21,7 @@ LogWriter
 ./logs/engine_results_*.jsonl
 ```
 
-## Project Struct
+### Project Struct
 ```
 .
 ├── engine/
