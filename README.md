@@ -22,6 +22,7 @@ LogWriter
 ```
 
 ## Project Struct
+```
 .
 ├── engine/
 │   ├── __init__.py
@@ -37,4 +38,4 @@ LogWriter
 ├── config.conf                   # 설정 파일
 ├── requirements.txt              # Python 의존성 (없음)
 └── README.md                     # 문서
->>>>>>> Stashed changes
+```
