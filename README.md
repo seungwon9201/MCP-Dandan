@@ -1,5 +1,3 @@
-# 🧩 MCP Proxy 사용법
-
 ## 📦 mitmproxy 설치
 
 ### Windows
