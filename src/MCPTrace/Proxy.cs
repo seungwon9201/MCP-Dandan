@@ -319,7 +319,7 @@ public static class Proxy
                 {
                     Console.WriteLine($"[ProxyRunner] Target PID {pid} detected → starting mitmdump.");
                     // 약간의 지연을 추가 (targetName 프로세스 초기화 시간 대기)
-                    Thread.Sleep(3000);
+                    Thread.Sleep(2000);
                     StartMitmDump(pid);
                     _currentPid = pid;
                 }
@@ -328,7 +328,7 @@ public static class Proxy
                     Console.WriteLine($"[ProxyRunner] Target PID changed {_currentPid} → {pid}, restarting mitmdump.");
                     StopProxy();
                     // 약간의 지연을 추가 (targetName 프로세스 초기화 시간 대기)
-                    Thread.Sleep(3000);
+                    Thread.Sleep(2000);
                     StartMitmDump(pid);
                     _currentPid = pid;
                 }
