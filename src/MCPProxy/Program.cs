@@ -85,7 +85,17 @@ namespace MCPProxy
             {
                 writer.WriteLine(line);
                 writer.Flush();
-                SendToCollector("client_to_server", line);
+
+                // MCP 형식으로 전송 (SEND)
+                try
+                {
+                    var message = JsonSerializer.Deserialize<JsonElement>(line);
+                    SendMCPEvent("SEND", message);
+                }
+                catch
+                {
+                    // JSON이 아니면 무시
+                }
             }
         }
 
@@ -99,7 +109,17 @@ namespace MCPProxy
             while ((line = reader.ReadLine()) != null)
             {
                 Console.WriteLine(line);
-                SendToCollector("server_to_client", line);
+
+                // MCP 형식으로 전송 (RECV)
+                try
+                {
+                    var message = JsonSerializer.Deserialize<JsonElement>(line);
+                    SendMCPEvent("RECV", message);
+                }
+                catch
+                {
+                    // JSON이 아니면 무시
+                }
             }
         }
 
@@ -118,7 +138,46 @@ namespace MCPProxy
         }
 
         /// <summary>
-        /// Collector로 이벤트 전송
+        /// MCP 이벤트를 명세서 형식으로 Collector에 전송
+        /// </summary>
+        private static void SendMCPEvent(string task, JsonElement message)
+        {
+            try
+            {
+                if (collectorWriter == null || targetProcess == null) return;
+
+                // 명세서에 맞는 형식
+                var envelope = new
+                {
+                    ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000, // nanoseconds
+                    producer = "proxy",
+                    pid = targetProcess.Id,
+                    pname = targetProcess.ProcessName,
+                    eventType = "MCP",
+                    data = new
+                    {
+                        task,
+                        transPort = "stdio",
+                        src = task == "SEND" ? "client" : "server",
+                        dst = task == "SEND" ? "server" : "client",
+                        message
+                    }
+                };
+
+                var json = JsonSerializer.Serialize(envelope);
+
+                // 길이 헤더 추가
+                collectorWriter.WriteLine($"{json.Length}");
+                collectorWriter.WriteLine(json);
+            }
+            catch
+            {
+                collectorWriter = null;
+            }
+        }
+
+        /// <summary>
+        /// 일반 이벤트를 Collector로 전송 (stderr 등)
         /// </summary>
         private static void SendToCollector(string type, string message)
         {
@@ -126,17 +185,21 @@ namespace MCPProxy
             {
                 if (collectorWriter == null) return;
 
-                var json = JsonSerializer.Serialize(new
+                var envelope = new
                 {
-                    timestamp = DateTime.UtcNow.ToString("o"),
-                    source = "proxy",
-                    type,
+                    ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000,
+                    producer = "proxy",
+                    pid = targetProcess?.Id ?? 0,
+                    pname = targetProcess?.ProcessName ?? "unknown",
+                    eventType = "ProxyLog",
                     data = new
                     {
-                        pid = targetProcess?.Id ?? 0,
+                        type,
                         message
                     }
-                });
+                };
+
+                var json = JsonSerializer.Serialize(envelope);
 
                 // 길이 헤더 추가
                 collectorWriter.WriteLine($"{json.Length}");

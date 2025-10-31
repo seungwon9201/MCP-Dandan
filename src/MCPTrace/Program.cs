@@ -133,17 +133,22 @@ public partial class Program
         Console.WriteLine("[*] ETW session stopped.");
     }
 
-    private static void SendToCollector(string type, object data)
+    private static void SendToCollector(string eventType, object eventData)
     {
         try
         {
-            var json = JsonSerializer.Serialize(new
+            // 명세서에 맞는 형식으로 변경
+            var envelope = new
             {
-                timestamp = DateTime.UtcNow.ToString("o"),
-                source = "etw",
-                type,
-                data
-            });
+                ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000, // nanoseconds
+                producer = "etw",
+                pid = Process.GetCurrentProcess().Id,
+                pname = Process.GetCurrentProcess().ProcessName,
+                eventType,
+                data = eventData  // 여기에 실제 이벤트 데이터가 들어감
+            };
+
+            var json = JsonSerializer.Serialize(envelope);
 
             // 길이 헤더 추가
             collectorWriter?.WriteLine($"{json.Length}");
