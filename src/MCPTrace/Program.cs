@@ -21,15 +21,41 @@ public partial class Program
     private static TcpClient? collectorClient;
     private static StreamWriter? collectorWriter;
 
-    static async Task Main()
+    static async Task Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 
-        // Collector 연결
-        InitCollector();
+        // 명령줄 인자에서 프로세스 이름 받기
+        if (args.Length > 0)
+        {
+            string arg = args[0].ToLower();
+            if (arg == "claude" || arg == "1")
+            {
+                TargetProcName = "claude";
+            }
+            else if (arg == "cursor" || arg == "2")
+            {
+                TargetProcName = "cursor";
+            }
+            else
+            {
+                Console.WriteLine($"[ERROR] 잘못된 인자: {args[0]}");
+                Console.WriteLine("사용법: MCPTrace.exe [claude|cursor|1|2]");
+                return;
+            }
+        }
+        else
+        {
+            Console.WriteLine("[ERROR] 프로세스 이름이 지정되지 않았습니다.");
+            Console.WriteLine("사용법: MCPTrace.exe [claude|cursor|1|2]");
+            return;
+        }
+
+        // Collector 연결 (재시도 로직 추가)
+        InitCollectorWithRetry();
 
         var cts = new CancellationTokenSource();
-        Proxy.StartWatcherAsync(cts.Token);
+
         // 종료 시 세션 정리 & 정상 종료 처리
         AppDomain.CurrentDomain.ProcessExit += (s, e) => CleanupETWSessions();
         Console.CancelKeyPress += (s, e) =>
@@ -47,40 +73,49 @@ public partial class Program
         Console.WriteLine("=".PadRight(80, '='));
         Console.WriteLine();
 
-        Console.WriteLine("모니터링할 프로세스를 선택하세요:");
-        Console.WriteLine("1. Claude");
-        Console.WriteLine("2. Cursor");
-        Console.Write("\n선택 (1 또는 2): ");
-
-        string choice = Console.ReadLine();
-        TargetProcName = choice == "2" ? "cursor" : "claude";
-
-        Console.WriteLine($"\n[+] 선택된 프로세스: {TargetProcName}");
-        Console.WriteLine("[+] ETW 수집 중...");
+        Console.WriteLine($"[+] 선택된 프로세스: {TargetProcName}");
+        Console.WriteLine($"[+] {TargetProcName}이(가) 실행될 때까지 대기 중...");
         Console.WriteLine("Note: 반드시 관리자 권한으로 실행해야 합니다.\n");
 
         // MCP Config 로드
         MCPRegistry.LoadConfig();
+
+        // Proxy watcher 시작 (자동으로 프로세스 감지 및 mitm 시작)
+        Proxy.StartWatcherAsync(cts.Token);
 
         await Task.Run(() => StartETWMonitoring(cts.Token));
 
         Console.WriteLine("[*] MCPTrace Agent 종료됨.");
     }
 
-    private static void InitCollector()
+    private static void InitCollectorWithRetry()
     {
-        try
+        int maxRetries = 10;
+        int retryDelay = 500; // ms
+
+        for (int i = 0; i < maxRetries; i++)
         {
-            collectorClient = new TcpClient("127.0.0.1", 8888);
-            var stream = collectorClient.GetStream();
-            collectorWriter = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
-            Console.WriteLine("[+] Connected to Collector");
+            try
+            {
+                collectorClient = new TcpClient("127.0.0.1", 8888);
+                var stream = collectorClient.GetStream();
+                collectorWriter = new StreamWriter(stream, Encoding.UTF8) { AutoFlush = true };
+                Console.WriteLine("[+] Connected to Collector");
+                return;
+            }
+            catch
+            {
+                if (i == 0)
+                {
+                    Console.WriteLine($"[-] Waiting for Collector... (attempt {i + 1}/{maxRetries})");
+                }
+                Thread.Sleep(retryDelay);
+            }
         }
-        catch
-        {
-            Console.WriteLine("[-] Failed to connect to Collector (will run without logging)");
-            collectorWriter = null;
-        }
+
+        Console.WriteLine("[-] Failed to connect to Collector after multiple attempts");
+        Console.WriteLine("[-] Will run without logging");
+        collectorWriter = null;
     }
 
     private static void StartETWMonitoring(CancellationToken cancellationToken)
