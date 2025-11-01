@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Management;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -20,10 +22,15 @@ public partial class Program
 
     private static TcpClient? collectorClient;
     private static StreamWriter? collectorWriter;
+    private static TraceEventSession? currentSession;
 
     static async Task Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
+
+        // 시작 전에 기존 세션 정리
+        CleanupETWSessions();
+        Thread.Sleep(500); // 정리 후 대기
 
         // 명령줄 인자에서 프로세스 이름 받기
         if (args.Length > 0)
@@ -51,7 +58,7 @@ public partial class Program
             return;
         }
 
-        // Collector 연결 (재시도 로직 추가)
+        // Collector 연결
         InitCollectorWithRetry();
 
         var cts = new CancellationTokenSource();
@@ -80,7 +87,7 @@ public partial class Program
         // MCP Config 로드
         MCPRegistry.LoadConfig();
 
-        // Proxy watcher 시작 (자동으로 프로세스 감지 및 mitm 시작)
+        // Proxy watcher 시작
         Proxy.StartWatcherAsync(cts.Token);
 
         await Task.Run(() => StartETWMonitoring(cts.Token));
@@ -91,7 +98,7 @@ public partial class Program
     private static void InitCollectorWithRetry()
     {
         int maxRetries = 10;
-        int retryDelay = 500; // ms
+        int retryDelay = 500;
 
         for (int i = 0; i < maxRetries; i++)
         {
@@ -120,72 +127,94 @@ public partial class Program
 
     private static void StartETWMonitoring(CancellationToken cancellationToken)
     {
-        using var session = new TraceEventSession("MCPTraceSession_" + Process.GetCurrentProcess().Id);
+        string sessionName = "MCPTraceSession_" + Process.GetCurrentProcess().Id;
 
         try
         {
-            session.EnableKernelProvider(
-                KernelTraceEventParser.Keywords.FileIOInit |
-                KernelTraceEventParser.Keywords.FileIO |
-                KernelTraceEventParser.Keywords.Process);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[ERROR] Kernel provider attach failed: {ex.Message}");
-        }
+            currentSession = new TraceEventSession(sessionName);
 
-        // 이벤트 핸들러 등록
-        session.Source.Kernel.ProcessStart += HandleProcessStart;
-        session.Source.Kernel.ProcessStop += HandleProcessStop;
-        session.Source.Kernel.FileIORead += HandleFileIORead;
-        session.Source.Kernel.FileIOWrite += HandleFileIOWrite;
-        session.Source.Kernel.FileIOCreate += HandleFileIOCreate;
-
-        // File Rename (Dynamic)
-        var dynamicParser = new DynamicTraceEventParser(session.Source);
-        dynamicParser.All += traceEvent =>
-        {
-            if (traceEvent.ProviderName.Equals("Microsoft-Windows-Kernel-File", StringComparison.OrdinalIgnoreCase) &&
-                traceEvent.EventName.Equals("FileIORename", StringComparison.OrdinalIgnoreCase))
-            {
-                HandleFileIORenameDynamic(traceEvent);
-            }
-        };
-
-        Task.Run(() =>
-        {
             try
             {
-                session.Source.Process();
+                currentSession.EnableKernelProvider(
+                    KernelTraceEventParser.Keywords.FileIOInit |
+                    KernelTraceEventParser.Keywords.FileIO |
+                    KernelTraceEventParser.Keywords.Process);
+
+                Console.WriteLine("[+] ETW Kernel provider attached successfully");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ETW ERROR] {ex.GetType().Name}: {ex.Message}");
-            }
-        });
+                Console.WriteLine($"[WARNING] Kernel provider attach failed: {ex.Message}");
+                Console.WriteLine("[*] Continuing without ETW file/process monitoring...");
+                Console.WriteLine("[*] Only MITM proxy monitoring will be active.");
 
-        cancellationToken.WaitHandle.WaitOne();
-        Console.WriteLine("[*] ETW session stopped.");
+                // ETW 없이도 계속 실행 (MITM만 사용)
+                cancellationToken.WaitHandle.WaitOne();
+                return;
+            }
+
+            // 이벤트 핸들러 등록
+            currentSession.Source.Kernel.ProcessStart += HandleProcessStart;
+            currentSession.Source.Kernel.ProcessStop += HandleProcessStop;
+            currentSession.Source.Kernel.FileIORead += HandleFileIORead;
+            currentSession.Source.Kernel.FileIOWrite += HandleFileIOWrite;
+            currentSession.Source.Kernel.FileIOCreate += HandleFileIOCreate;
+
+            // File Rename (Dynamic)
+            var dynamicParser = new DynamicTraceEventParser(currentSession.Source);
+            dynamicParser.All += traceEvent =>
+            {
+                if (traceEvent.ProviderName.Equals("Microsoft-Windows-Kernel-File", StringComparison.OrdinalIgnoreCase) &&
+                    traceEvent.EventName.Equals("FileIORename", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandleFileIORenameDynamic(traceEvent);
+                }
+            };
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    currentSession.Source.Process();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[ETW ERROR] {ex.GetType().Name}: {ex.Message}");
+                }
+            });
+
+            cancellationToken.WaitHandle.WaitOne();
+            Console.WriteLine("[*] ETW session stopped.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to create ETW session: {ex.Message}");
+            Console.WriteLine("[*] Continuing without ETW monitoring...");
+            cancellationToken.WaitHandle.WaitOne();
+        }
+        finally
+        {
+            currentSession?.Dispose();
+            currentSession = null;
+        }
     }
 
     private static void SendToCollector(string eventType, object eventData)
     {
         try
         {
-            // 명세서에 맞는 형식으로 변경
             var envelope = new
             {
-                ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000, // nanoseconds
+                ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1000000,
                 producer = "etw",
                 pid = Process.GetCurrentProcess().Id,
                 pname = Process.GetCurrentProcess().ProcessName,
                 eventType,
-                data = eventData  // 여기에 실제 이벤트 데이터가 들어감
+                data = eventData
             };
 
             var json = JsonSerializer.Serialize(envelope);
 
-            // 길이 헤더 추가
             collectorWriter?.WriteLine($"{json.Length}");
             collectorWriter?.WriteLine(json);
         }
@@ -197,20 +226,61 @@ public partial class Program
 
     private static void CleanupETWSessions()
     {
+        Console.WriteLine("[*] Cleaning up ETW sessions...");
+
+        // 현재 세션 정리
         try
         {
-            using var s1 = new TraceEventSession("MCPTraceSession_" + Process.GetCurrentProcess().Id, null);
-            s1.Stop();
+            currentSession?.Dispose();
+            currentSession = null;
         }
         catch { }
 
+        // 프로세스 ID 기반 세션 정리
+        int currentPid = Process.GetCurrentProcess().Id;
+        string[] sessionNames = new[]
+        {
+            $"MCPTraceSession_{currentPid}",
+            $"MCPMonitorSession_{currentPid}",
+            "MCPTraceSession",
+            "MCPMonitorSession"
+        };
+
+        foreach (var sessionName in sessionNames)
+        {
+            try
+            {
+                using var session = new TraceEventSession(sessionName, null);
+                session.Stop();
+                Console.WriteLine($"[Cleanup] Stopped session: {sessionName}");
+            }
+            catch
+            {
+                // 세션이 없거나 이미 정리됨
+            }
+        }
+
+        // 모든 MCPTrace 관련 세션 정리 (추가)
         try
         {
-            using var s2 = new TraceEventSession("MCPMonitorSession_" + Process.GetCurrentProcess().Id, null);
-            s2.Stop();
+            var allSessions = TraceEventSession.GetActiveSessionNames();
+            foreach (var session in allSessions)
+            {
+                if (session.StartsWith("MCPTrace", StringComparison.OrdinalIgnoreCase) ||
+                    session.StartsWith("MCPMonitor", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        using var s = new TraceEventSession(session, null);
+                        s.Stop();
+                        Console.WriteLine($"[Cleanup] Stopped orphaned session: {session}");
+                    }
+                    catch { }
+                }
+            }
         }
         catch { }
 
-        Console.WriteLine("[Cleanup] ETW sessions cleaned up.");
+        Console.WriteLine("[Cleanup] ETW sessions cleanup completed.");
     }
 }
