@@ -1,40 +1,21 @@
+# 82ch-Engine Configuration (Refactored)
+# Queue 관련 설정이 제거되었습니다.
+
 [EventProvider]
-# ZeroMQ Subscriber 주소 (MCPCollector의 Publisher 주소)
+# ZeroMQ Publisher 주소 (MCPCollector)
 zmq_address = tcp://localhost:5555
 
-# 레거시: 외부 프로세스 경로 (ZeroMQ 사용 시 불필요)
-# process_path = C:\path\to\ETW.exe
-
-
-[Queue]
-# 메인 이벤트 큐 크기
-main_queue_size = 10000
-
-# 각 엔진별 큐 크기
-engine_queue_size = 1000
-
-# 이벤트 로그 큐 크기
-event_log_queue_size = 5000
-
-# 결과 로그 큐 크기
-result_log_queue_size = 5000
-
-# 큐 타임아웃 (초)
-queue_timeout = 0.5
-
-
 [Engine]
-# Sensitive File Engine 활성화 여부
-sensitive_file_enabled = true
-
-# Semantic Gap Engine 활성화 여부
-semantic_gap_enabled = true
-
+# 활성화할 엔진 설정
+sensitive_file_enabled = True
+semantic_gap_enabled = True
 
 [Log]
-# 로그 파일 저장 디렉토리
+# 로그 디렉토리
 log_dir = ./logs
 
-# 로그 파일 로테이션 크기 (MB)
-# 파일 크기가 이 값을 초과하면 새 파일 생성
-rotation_size_mb = 100
+# 로그 파일 최대 크기 (MB)
+max_log_file_size_mb = 100
+
+# 최대 로그 파일 개수 (오래된 파일 자동 삭제)
+max_log_files = 5
