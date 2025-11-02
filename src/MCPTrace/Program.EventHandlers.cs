@@ -105,9 +105,40 @@ public partial class Program
         }
     }
 
+    /// <summary>
+    /// 파일 읽기 이벤트에 대한 이벤트 핸들러입니다.
+    /// </summary>
     private static void HandleFileIORead(FileIOReadWriteTraceData data)
     {
-        // File I/O Read 처리 로직 (필요시 구현)
+        if (TrackedPids.Contains(data.ProcessID))
+        {
+            string mcpTag = MCPRegistry.GetNameTag(data.ProcessID);
+
+            // MCP 서버 프로세스만 표시 (TargetProcName이 아닌 다른 태그를 가진 경우)
+            if (string.IsNullOrEmpty(mcpTag) || mcpTag.Equals(TargetProcName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"[FILE Read] " +
+                              $"Time: {data.TimeStamp.ToLocalTime()}, " +
+                              $"PID: {data.ProcessID}, " +
+                              $"File: {data.FileName}, " +
+                              $"Size: {data.IoSize} bytes");
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.WriteLine($"└─ MCP Tag: '{mcpTag}'");
+            Console.ResetColor();
+
+            SendToCollector("FileIO", new
+            {
+                task = "Read",
+                pid = data.ProcessID,
+                pname = data.ProcessName,
+                fileName = data.FileName ?? "",
+                ioSize = data.IoSize,
+                offset = data.Offset,
+                mcpTag = mcpTag
+            });
+        }
     }
 
     /// <summary>
@@ -115,7 +146,35 @@ public partial class Program
     /// </summary>
     private static void HandleFileIOWrite(FileIOReadWriteTraceData data)
     {
-        // File I/O Write 처리 로직 (필요시 구현)
+        if (TrackedPids.Contains(data.ProcessID))
+        {
+            string mcpTag = MCPRegistry.GetNameTag(data.ProcessID);
+
+            // MCP 서버 프로세스만 표시 (TargetProcName이 아닌 다른 태그를 가진 경우)
+            if (string.IsNullOrEmpty(mcpTag) || mcpTag.Equals(TargetProcName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"[FILE Write] " +
+                              $"Time: {data.TimeStamp.ToLocalTime()}, " +
+                              $"PID: {data.ProcessID}, " +
+                              $"File: {data.FileName}, " +
+                              $"Size: {data.IoSize} bytes");
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.WriteLine($"└─ MCP Tag: '{mcpTag}'");
+            Console.ResetColor();
+
+            SendToCollector("FileIO", new
+            {
+                task = "Write",
+                pid = data.ProcessID,
+                pname = data.ProcessName,
+                fileName = data.FileName ?? "",
+                ioSize = data.IoSize,
+                offset = data.Offset,
+                mcpTag = mcpTag
+            });
+        }
     }
 
     /// <summary>
@@ -123,7 +182,32 @@ public partial class Program
     /// </summary>
     private static void HandleFileIOCreate(FileIOCreateTraceData data)
     {
-        // File I/O Create 처리 로직 (필요시 구현)
+        if (TrackedPids.Contains(data.ProcessID))
+        {
+            string mcpTag = MCPRegistry.GetNameTag(data.ProcessID);
+
+            // MCP 서버 프로세스만 표시 (TargetProcName이 아닌 다른 태그를 가진 경우)
+            if (string.IsNullOrEmpty(mcpTag) || mcpTag.Equals(TargetProcName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            Console.ForegroundColor = ConsoleColor.Magenta;
+            Console.WriteLine($"[FILE Create] " +
+                              $"Time: {data.TimeStamp.ToLocalTime()}, " +
+                              $"PID: {data.ProcessID}, " +
+                              $"File: {data.FileName}");
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.WriteLine($"└─ MCP Tag: '{mcpTag}'");
+            Console.ResetColor();
+
+            SendToCollector("FileIO", new
+            {
+                task = "Create",
+                pid = data.ProcessID,
+                pname = data.ProcessName,
+                fileName = data.FileName ?? "",
+                mcpTag = mcpTag
+            });
+        }
     }
 
     /// <summary>
@@ -131,6 +215,55 @@ public partial class Program
     /// </summary>
     private static void HandleFileIORenameDynamic(TraceEvent data)
     {
-        // File I/O Rename 처리 로직 (필요시 구현)
+        int pid = data.ProcessID;
+
+        if (TrackedPids.Contains(pid))
+        {
+            string mcpTag = MCPRegistry.GetNameTag(pid);
+
+            // MCP 서버 프로세스만 표시 (TargetProcName이 아닌 다른 태그를 가진 경우)
+            if (string.IsNullOrEmpty(mcpTag) || mcpTag.Equals(TargetProcName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string fileName = "";
+            string newFileName = "";
+
+            try
+            {
+                // FileIORename 이벤트의 필드 추출 시도
+                if (data.PayloadNames.Contains("FileName"))
+                {
+                    fileName = data.PayloadString(data.PayloadIndex("FileName")) ?? "";
+                }
+                if (data.PayloadNames.Contains("NewFileName"))
+                {
+                    newFileName = data.PayloadString(data.PayloadIndex("NewFileName")) ?? "";
+                }
+            }
+            catch
+            {
+                // 필드 접근 실패 시 무시
+            }
+
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            Console.WriteLine($"[FILE Rename] " +
+                              $"Time: {data.TimeStamp.ToLocalTime()}, " +
+                              $"PID: {pid}, " +
+                              $"From: {fileName}, " +
+                              $"To: {newFileName}");
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.WriteLine($"└─ MCP Tag: '{mcpTag}'");
+            Console.ResetColor();
+
+            SendToCollector("FileIO", new
+            {
+                task = "Rename",
+                pid = pid,
+                pname = data.ProcessName,
+                fileName = fileName,
+                newFileName = newFileName,
+                mcpTag = mcpTag
+            });
+        }
     }
 }
