@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+"""
+82ch-Engine Server
+
+ZeroMQ를 통해 MCPCollector로부터 이벤트를 수신하고,
+등록된 엔진들에게 분배하여 분석 결과를 로그로 저장합니다.
+"""
+
 from engine.sensitive_file_engine import SensitiveFileEngine
 from engine.semantic_gap_engine import SemanticGapEngine
 from config_loader import ConfigLoader
@@ -41,9 +49,9 @@ def main():
     """통합 분석 엔진 서버"""
     global event_provider, event_distributor, engines, log_writer
 
-    print("=" * 60)
-    print("Integrated Analysis Engine Server (Queue-based)")
-    print("=" * 60)
+    print("=" * 80)
+    print("82ch-Engine Server (ZeroMQ Edition)")
+    print("=" * 80)
 
     # 설정 파일 로드
     config = ConfigLoader()
@@ -71,14 +79,15 @@ def main():
         engine_queues['SensitiveFileEngine'] = sensitive_engine_queue
 
     # Semantic Gap Engine
-    semantic_gap_queue = Queue(maxsize=config.get_engine_queue_maxsize())
-    semantic_gap_engine = SemanticGapEngine(
-        semantic_gap_queue,
-        result_log_queue,
-        detail_mode=False  # True로 설정하면 상세 JSON 결과
-    )
-    engines.append(semantic_gap_engine)
-    engine_queues['SemanticGapEngine'] = semantic_gap_queue
+    if config.get_semantic_gap_enabled():
+        semantic_gap_queue = Queue(maxsize=config.get_engine_queue_maxsize())
+        semantic_gap_engine = SemanticGapEngine(
+            semantic_gap_queue,
+            result_log_queue,
+            detail_mode=False  # True로 설정하면 상세 JSON 결과
+        )
+        engines.append(semantic_gap_engine)
+        engine_queues['SemanticGapEngine'] = semantic_gap_queue
 
     print(f"\n실행 중인 엔진:")
     for i, engine in enumerate(engines, 1):
@@ -86,8 +95,9 @@ def main():
         print(f"     • 입력 큐: 전용 큐 (크기: {config.get_engine_queue_maxsize()})")
         print(f"     • 출력: 로그 큐")
 
-    # EventProvider 생성
-    event_provider = EventProvider(main_queue)
+    # EventProvider 생성 (ZeroMQ)
+    zmq_address = config.get_zmq_address()
+    event_provider = EventProvider(main_queue, zmq_address)
 
     # EventDistributor 생성 (이벤트 로그 큐 추가)
     event_distributor = EventDistributor(main_queue, engine_queues, event_log_queue)
@@ -99,21 +109,24 @@ def main():
         # 모든 컴포넌트 시작
         print("\n컴포넌트 시작 중...")
 
-        # 1. EventProvider 시작 (외부 프로세스 실행)
-        event_provider.start()
+        # 1. LogWriter 시작
+        log_writer.start()
 
-        # 2. EventDistributor 시작 (이벤트 분배)
-        event_distributor.start()
-
-        # 3. 모든 엔진 시작
+        # 2. 모든 엔진 시작
         for engine in engines:
             engine.start()
 
-        # 4. LogWriter 시작
-        log_writer.start()
+        # 3. EventDistributor 시작 (이벤트 분배)
+        event_distributor.start()
 
+        # 4. EventProvider 시작 (ZeroMQ 연결)
+        event_provider.start()
+
+        print("\n" + "=" * 80)
         print("✓ 모든 컴포넌트가 실행 중입니다.")
-        print("\n종료하려면 Ctrl+C를 누르세요.\n")
+        print("  MCPCollector가 실행 중이어야 이벤트를 수신할 수 있습니다.")
+        print("  종료하려면 Ctrl+C를 누르세요.")
+        print("=" * 80 + "\n")
 
         # Ctrl+C 핸들러 등록
         signal.signal(signal.SIGINT, signal_handler)

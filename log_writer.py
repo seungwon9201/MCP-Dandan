@@ -37,7 +37,7 @@ class LogWriter:
         self.queue_timeout = config.get_queue_timeout()
 
         # 로그 설정
-        self.log_directory = config.get_log_directory()
+        self.log_directory = config.get_log_dir()
         self.max_log_file_size = config.get_max_log_file_size() * 1024 * 1024  # MB to bytes
         self.max_log_files = config.get_max_log_files()
 

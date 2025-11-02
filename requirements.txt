@@ -1,2 +1,3 @@
 # No external dependencies required
 # All components use Python standard library (queue, threading, subprocess, etc.)
+pyzmq>=25.1.0
