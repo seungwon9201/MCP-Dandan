@@ -30,28 +30,38 @@ function RightChatPanel({ messages, selectedMessage, setSelectedMessage }) {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {messages.map((message) => {
-          const isToolCall = message.type === 'tool_call'
+          // Client messages (call, initialize, notifications) go LEFT
+          // Server messages (response, result) go RIGHT
+          const isClientMessage = message.type?.includes('call') || message.type === 'initialize' || message.type?.includes('notifications')
           const isSelected = selectedMessage?.id === message.id
+
+          // Extract display text from message
+          let displayText = message.type || 'Unknown'
+
+          // For tools/call messages, show the tool name
+          if (message.type === 'tools/call' && message.data?.message?.params?.name) {
+            displayText = `${message.type}\n${message.data.message.params.name}`
+          }
 
           return (
             <div
               key={message.id}
               onClick={() => setSelectedMessage(message)}
-              className={`flex ${isToolCall ? 'justify-start' : 'justify-end'} cursor-pointer`}
+              className={`flex ${isClientMessage ? 'justify-start' : 'justify-end'} cursor-pointer`}
             >
-              <div className="flex flex-col items-end max-w-[80%]">
+              <div className={`flex flex-col ${isClientMessage ? 'items-start' : 'items-end'} max-w-[80%]`}>
                 {/* Chat Bubble */}
                 <div
-                  className={`relative bg-gray-200 rounded-2xl px-4 py-3 ${
+                  className={`relative rounded-2xl px-4 py-3 ${
                     isSelected ? 'ring-2 ring-blue-400' : ''
-                  }`}
+                  } ${isClientMessage ? 'bg-blue-100' : 'bg-gray-200'}`}
                   style={{
-                    borderBottomLeftRadius: isToolCall ? '4px' : '16px',
-                    borderBottomRightRadius: isToolCall ? '16px' : '4px',
+                    borderBottomLeftRadius: isClientMessage ? '4px' : '16px',
+                    borderBottomRightRadius: isClientMessage ? '16px' : '4px',
                   }}
                 >
-                  <div className="font-mono text-sm text-gray-900">
-                    {isToolCall ? message.data.tool : message.data.result}
+                  <div className="font-mono text-sm text-gray-900 whitespace-pre-line">
+                    {displayText}
                   </div>
                 </div>
 
@@ -59,8 +69,8 @@ function RightChatPanel({ messages, selectedMessage, setSelectedMessage }) {
                 <div className="flex items-center gap-1 mt-1 px-2">
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      isToolCall ? 'bg-green-500' :
-                      message.data.status === 'success' ? 'bg-green-500' : 'bg-red-500'
+                      message.maliciousScore > 5 ? 'bg-red-500' :
+                      message.maliciousScore > 2 ? 'bg-yellow-500' : 'bg-green-500'
                     }`}
                   />
                   <span className="text-xs text-gray-500 font-mono">{message.timestamp}</span>
