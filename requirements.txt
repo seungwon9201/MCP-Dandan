@@ -1,2 +1,5 @@
-# No external dependencies required
-# All components use Python standard library (queue, threading, subprocess, etc.)
+# ZeroMQ (비동기 지원)
+pyzmq>=25.0.0
+
+# 비동기 파일 I/O
+aiofiles>=23.0.0

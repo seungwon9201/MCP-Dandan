@@ -1,5 +1,4 @@
-from engine.base_engine import BaseEngine
-from queue import Queue
+from engines.base_engine import BaseEngine
 from typing import Any
 import re
 
@@ -12,55 +11,41 @@ class SensitiveFileEngine(BaseEngine):
     민감한 파일 접근을 탐지합니다.
     """
 
-    def __init__(self, input_queue: Queue, log_queue: Queue):
+    def __init__(self, logger):
         """
-        민감 파일 탐지 엔진 초기화
-
+        민감 파일 탐지 엔진 초기화 (Queue 제거 버전)
         Args:
-            input_queue: 입력 큐
-            log_queue: 로그 큐
+            logger: Logger 인스턴스
         """
         super().__init__(
-            input_queue=input_queue,
-            log_queue=log_queue,
+            logger=logger,
             name='SensitiveFileEngine',
             event_types=['File']  # File 이벤트만 처리
         )
 
         # Critical 패턴 (항상 차단해야 함)
         self.critical_patterns = [
-            # SSH Keys
             r'\.ssh[/\\]id_rsa$',
             r'\.ssh[/\\]id_dsa$',
             r'\.ssh[/\\]id_ecdsa$',
             r'\.ssh[/\\]id_ed25519$',
             r'\.ssh[/\\].*\.pem$',
             r'\.ssh[/\\].*_rsa$',
-
-            # Cryptocurrency wallets
             r'wallet\.dat$',
             r'\.bitcoin[/\\]wallet\.dat$',
             r'\.ethereum[/\\]keystore[/\\]',
             r'\.electrum[/\\]wallets[/\\]',
-
-            # Browser stored credentials
             r'appdata[/\\].*[/\\]google[/\\]chrome[/\\].*[/\\]login data$',
             r'appdata[/\\].*[/\\]microsoft[/\\]edge[/\\].*[/\\]login data$',
             r'appdata[/\\].*[/\\]mozilla[/\\]firefox[/\\].*[/\\]logins\.json$',
             r'appdata[/\\].*[/\\]brave[/\\].*[/\\]login data$',
-
-            # Browser cookies
             r'appdata[/\\].*[/\\]google[/\\]chrome[/\\].*[/\\]cookies$',
             r'appdata[/\\].*[/\\]microsoft[/\\]edge[/\\].*[/\\]cookies$',
             r'appdata[/\\].*[/\\]mozilla[/\\]firefox[/\\].*[/\\]cookies\.sqlite$',
-
-            # Cloud provider credentials
             r'\.aws[/\\]credentials$',
             r'\.aws[/\\]config$',
             r'\.azure[/\\]credentials$',
             r'\.gcloud[/\\].*\.json$',
-
-            # Private keys and certificates
             r'.*\.key$',
             r'.*\.pem$',
             r'.*\.ppk$',
@@ -68,7 +53,7 @@ class SensitiveFileEngine(BaseEngine):
             r'.*\.p12$',
         ]
 
-        # High-risk 패턴
+        # High-risk 및 Medium-risk 패턴
         self.high_risk_patterns = [
             r'password.*\.txt$',
             r'credential.*\.txt$',
@@ -81,13 +66,12 @@ class SensitiveFileEngine(BaseEngine):
             r'config[/\\].*credential',
         ]
 
-        # Medium-risk 패턴
         self.medium_risk_patterns = [
             r'[/\\]temp[/\\]',
             r'[/\\]tmp[/\\]',
         ]
 
-        # Regex 컴파일 (성능 향상)
+        # Regex 컴파일
         self.critical_regex = [re.compile(p, re.IGNORECASE) for p in self.critical_patterns]
         self.high_risk_regex = [re.compile(p, re.IGNORECASE) for p in self.high_risk_patterns]
         self.medium_risk_regex = [re.compile(p, re.IGNORECASE) for p in self.medium_risk_patterns]
@@ -95,19 +79,11 @@ class SensitiveFileEngine(BaseEngine):
     def process(self, data: Any) -> Any:
         """
         File 이벤트를 분석하여 민감한 파일 접근 탐지
-
         BaseEngine에서 이미 File 이벤트만 필터링되어 전달됩니다.
-
-        Args:
-            data: 입력 이벤트 (dict) - File 이벤트만 전달됨
-
-        Returns:
-            탐지 결과 (탐지되지 않으면 None)
         """
-        # 들어오는 모든 값 콘솔 출력
         print(f"[SensitiveFileEngine] 입력 데이터: {data}")
 
-        # filePath 추출 (최상위 또는 data 객체 내부)
+        # filePath 추출
         file_path = data.get('filePath')
         if not file_path and 'data' in data and isinstance(data['data'], dict):
             file_path = data['data'].get('filePath')
@@ -118,11 +94,10 @@ class SensitiveFileEngine(BaseEngine):
 
         print(f"[SensitiveFileEngine] 파일 경로 분석 중: {file_path}")
 
-        # 패턴 매칭
         findings = []
         severity = 'none'
 
-        # Critical 패턴 확인
+        # Critical
         for pattern in self.critical_regex:
             if pattern.search(file_path):
                 findings.append({
@@ -134,7 +109,7 @@ class SensitiveFileEngine(BaseEngine):
                 severity = 'critical'
                 break
 
-        # High-risk 패턴 확인
+        # High-risk
         if severity == 'none':
             for pattern in self.high_risk_regex:
                 if pattern.search(file_path):
@@ -147,7 +122,7 @@ class SensitiveFileEngine(BaseEngine):
                     severity = 'high'
                     break
 
-        # Medium-risk 패턴 확인
+        # Medium-risk
         if severity == 'none':
             for pattern in self.medium_risk_regex:
                 if pattern.search(file_path):
@@ -160,18 +135,15 @@ class SensitiveFileEngine(BaseEngine):
                     severity = 'medium'
                     break
 
-        # 탐지된 것만 출력
+        # 결과 출력
         if len(findings) > 0:
-            # reference 생성 (리스트 형식)
             references = []
             if 'ts' in data:
                 references.append(f"id-{data['ts']}")
-            # 추가 reference가 있다면 여기에 추가 가능
-            # 예: references.append(f"pid-{data.get('pid')}")
 
             result = {
                 'detected': True,
-                'reference': references,  # 리스트 형식
+                'reference': references,
                 'result': {
                     'detector': 'SensitiveFile',
                     'severity': severity,
@@ -181,7 +153,7 @@ class SensitiveFileEngine(BaseEngine):
                     'original_event': data
                 }
             }
-            print(f"[SensitiveFileEngine] ⚠️  민감 파일 탐지! severity={severity}, file={file_path}")
+            print(f"[SensitiveFileEngine] ⚠️ 민감 파일 탐지! severity={severity}, file={file_path}")
             print(f"[SensitiveFileEngine] 탐지 결과: {result}")
             return result
 
@@ -215,5 +187,4 @@ class SensitiveFileEngine(BaseEngine):
         for key, reason in reasons.items():
             if key in pattern_lower:
                 return reason
-
         return 'Sensitive file pattern detected'
