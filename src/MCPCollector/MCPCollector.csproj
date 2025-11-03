@@ -9,6 +9,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="NetMQ" Version="4.0.2.2" />
+		<PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
 	</ItemGroup>
 	
 </Project>
