@@ -1,4 +1,30 @@
-## 82ch-Engine (Semantic gap Engine branch)
+## 82ch-Engine
+
+### Quick Start
+
+**Option 1: Docker (Recommended)**
+```powershell
+# Windows
+.\setup.ps1
+
+# Mac/Linux
+docker-compose up -d
+```
+
+**Option 2: Manual Setup**
+```bash
+pip install -r requirements.txt
+python engine_server.py
+```
+
+**Database Query**
+```bash
+python query_db.py
+```
+
+For detailed setup instructions, see [DATABASE_SETUP.md](../82ch-observer/DATABASE_SETUP.md)
+
+---
 
 ### Data Flow
 ```
