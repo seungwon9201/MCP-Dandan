@@ -7,14 +7,14 @@ class BaseEngine(ABC):
     모든 분석 엔진의 공통 기반 클래스 (Refactored - No Queue)
     """
 
-    def __init__(self, logger, name: str, event_types: list[str] | None = None):
+    def __init__(self, db, name: str, event_types: list[str] | None = None):
         """
         Args:
-            logger: Logger 인스턴스
+            db: Database 인스턴스
             name: 엔진 이름
             event_types: 처리할 이벤트 타입 리스트 (None이면 모든 이벤트 처리)
         """
-        self.logger = logger
+        self.db = db
         self.name = name
         self.event_types = event_types or []
 
@@ -37,6 +37,7 @@ class BaseEngine(ABC):
         """
         공통 이벤트 처리 진입점.
         event_types 필터링 후 process() 호출.
+        (현재는 사용하지 않음 - EventHub가 직접 process 호출)
         """
         # 이벤트 타입 필터링
         if self.event_types and data.get('eventType') not in self.event_types:
@@ -44,8 +45,6 @@ class BaseEngine(ABC):
 
         try:
             result = self.process(data)
-            if result:
-                await self.logger.log_result(result)
             return result
         except Exception as e:
             print(f"[{self.name}] ERROR: {e}")
