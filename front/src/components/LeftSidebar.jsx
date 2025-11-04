@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MessageSquare, Settings } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MessageSquare, Settings, LayoutDashboard } from 'lucide-react'
 
 function LeftSidebar({ isOpen, setIsOpen, servers, selectedServer, setSelectedServer }) {
   return (
@@ -21,6 +21,19 @@ function LeftSidebar({ isOpen, setIsOpen, servers, selectedServer, setSelectedSe
         <div className="p-4 border-b border-gray-200 flex items-center gap-2 mt-12">
           <MessageSquare size={24} className="text-gray-600" />
           <h2 className="font-semibold text-gray-800">MCP Servers</h2>
+        </div>
+
+        {/* Dashboard Button */}
+        <div className="p-4 border-b border-gray-200">
+          <button
+            onClick={() => setSelectedServer(null)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              selectedServer === null ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-700 hover:bg-gray-100'
+            }`}
+          >
+            <LayoutDashboard size={20} />
+            <span className="text-sm">Dashboard</span>
+          </button>
         </div>
 
         {/* Server List */}
