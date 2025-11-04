@@ -166,7 +166,7 @@ class EventHub:
             처리 결과 (없으면 None)
         """
         try:
-            result = await engine.process(event)
+            result = await engine.handle_event(event)
             return result
         except Exception as e:
             print(f'✗ [{engine.name}] 처리 오류: {e}')

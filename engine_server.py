@@ -13,6 +13,8 @@ from zmq_source import ZeroMQSource
 from database import Database
 from engines.sensitive_file_engine import SensitiveFileEngine
 from engines.semantic_gap_engine import SemanticGapEngine
+from engines.command_injection_engine import CommandInjectionEngine
+from engines.file_system_exposure_engine import FileSystemExposureEngine
 
 
 class EngineServer:
@@ -38,7 +40,17 @@ class EngineServer:
                 detail_mode=False
             )
             self.engines.append(engine)
-            
+
+        # Command Injection Engine
+        if self.config.get_command_injection_enabled():
+            engine = CommandInjectionEngine(self.logger)
+            self.engines.append(engine)
+
+        # File System Exposure Engine
+        if self.config.get_file_system_exposure_enabled():
+            engine = FileSystemExposureEngine(self.logger)
+            self.engines.append(engine)
+
         print(f"\n실행 중인 엔진:")
         for i, engine in enumerate(self.engines, 1):
             print(f"  {i}. {engine.name}")
