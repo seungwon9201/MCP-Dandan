@@ -42,6 +42,7 @@ function Dashboard({ setSelectedServer, servers }) {
   const [detectedEvents, setDetectedEvents] = useState([])
   const [topServers, setTopServers] = useState([])
   const [threatStats, setThreatStats] = useState({})
+  const [timelineData, setTimelineData] = useState([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -126,9 +127,27 @@ function Dashboard({ setSelectedServer, servers }) {
         }
       })
 
+      // Process timeline data (group by date)
+      const timelineMap = {}
+      Object.entries(allMessages).forEach(([, messages]) => {
+        messages.forEach(msg => {
+          if (msg.maliciousScore > 0) {
+            // Extract date from timestamp (e.g., "2025-02-16 10:23:15 KST" -> "2025-02-16")
+            const date = msg.timestamp.split(' ')[0]
+            timelineMap[date] = (timelineMap[date] || 0) + 1
+          }
+        })
+      })
+
+      // Convert to array and sort by date
+      const timeline = Object.entries(timelineMap)
+        .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+        .map(([date, count]) => ({ date, count }))
+
       setTopServers(sortedServers)
       setDetectedEvents(events)
       setThreatStats(stats)
+      setTimelineData(timeline)
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     }
@@ -153,10 +172,10 @@ function Dashboard({ setSelectedServer, servers }) {
           {topServers.length === 0 ? (
             <p className="text-gray-500 text-center py-3 text-sm">No detections found</p>
           ) : (
-            <div className="flex items-end justify-around gap-3 h-40">
+            <div className="flex items-end justify-around gap-3 h-64">
               {topServers.map((server, index) => {
                 const maxCount = topServers[0]?.count || 1
-                const barHeightPx = Math.max(20, (server.count / maxCount) * 140)
+                const barHeightPx = Math.max(20, (server.count / maxCount) * 240)
 
                 return (
                   <div key={index} className="flex flex-col items-center gap-1 flex-1 h-full justify-end">
@@ -171,6 +190,90 @@ function Dashboard({ setSelectedServer, servers }) {
               })}
             </div>
           )}
+
+          {/* Time-Series View */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="text-base font-semibold text-gray-800 mb-3">Time-Series View</h3>
+            {timelineData.length === 0 ? (
+              <p className="text-gray-500 text-center py-4 text-xs">No timeline data available</p>
+            ) : (
+              <div className="relative h-40">
+                <svg className="w-full h-full" viewBox="0 0 800 160" preserveAspectRatio="none">
+                  {/* Grid lines */}
+                  <line x1="40" y1="10" x2="40" y2="140" stroke="#E5E7EB" strokeWidth="1" />
+                  <line x1="40" y1="140" x2="780" y2="140" stroke="#E5E7EB" strokeWidth="1" />
+
+                  {/* Y-axis labels - only show max value */}
+                  {(() => {
+                    const maxCount = Math.max(...timelineData.map(d => d.count), 1)
+                    return (
+                      <text x="35" y="14" textAnchor="end" fontSize="10" fill="#9CA3AF">
+                        {maxCount}
+                      </text>
+                    )
+                  })()}
+
+                  {/* Line path */}
+                  {(() => {
+                    const maxCount = Math.max(...timelineData.map(d => d.count), 1)
+                    const xStep = 740 / (timelineData.length - 1 || 1)
+
+                    const points = timelineData.map((d, i) => {
+                      const x = 40 + i * xStep
+                      const y = 140 - (d.count / maxCount) * 130
+                      return `${x},${y}`
+                    }).join(' ')
+
+                    return (
+                      <>
+                        {/* Line */}
+                        <polyline
+                          points={points}
+                          fill="none"
+                          stroke="#6366F1"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+
+                        {/* Data points */}
+                        {timelineData.map((d, i) => {
+                          const x = 40 + i * xStep
+                          const y = 140 - (d.count / maxCount) * 130
+                          return (
+                            <circle
+                              key={i}
+                              cx={x}
+                              cy={y}
+                              r="2.5"
+                              fill="#6366F1"
+                            />
+                          )
+                        })}
+                      </>
+                    )
+                  })()}
+
+                  {/* X-axis labels - show only first and last */}
+                  {(() => {
+                    if (timelineData.length === 0) return null
+                    const first = timelineData[0]
+                    const last = timelineData[timelineData.length - 1]
+                    return (
+                      <>
+                        <text x="40" y="153" textAnchor="start" fontSize="9" fill="#9CA3AF">
+                          {first.date.slice(5)}
+                        </text>
+                        <text x="780" y="153" textAnchor="end" fontSize="9" fill="#9CA3AF">
+                          {last.date.slice(5)}
+                        </text>
+                      </>
+                    )
+                  })()}
+                </svg>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Threats */}
