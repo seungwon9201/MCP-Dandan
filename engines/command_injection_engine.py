@@ -4,27 +4,12 @@ import re
 
 
 class CommandInjectionEngine(BaseEngine):
-    """
-    Command Injection 탐지 엔진
-
-    Process 및 ProxyLog 이벤트를 분석하여 잠재적인 Command Injection 공격을 탐지합니다.
-    - 쉘 메타문자 (;, |, &, $, `, etc.)
-    - 위험한 명령어 조합
-    - 파일 경로 조작 시도
-    - 환경변수 주입
-    """
 
     def __init__(self, db):
-        """
-        Command Injection 탐지 엔진 초기화
-
-        Args:
-            db: Database 인스턴스
-        """
         super().__init__(
             db=db,
             name='CommandInjectionEngine',
-            event_types=['MCP']  # MCP 및 ProxyLog 이벤트 처리
+            event_types=['MCP']  # MCP 이벤트 처리
         )
 
         # Critical 패턴 (매우 위험)
@@ -118,9 +103,6 @@ class CommandInjectionEngine(BaseEngine):
         ]
 
     def process(self, data: Any) -> Any:
-        """
-        MCP 이벤트를 분석하여 Command Injection 시도 탐지
-        """
         print(f"[CommandInjectionEngine] 입력 데이터: {data}")
 
         # 분석할 텍스트 추출
@@ -209,7 +191,7 @@ class CommandInjectionEngine(BaseEngine):
                     'original_event': data
                 }
             }
-            print(f"[CommandInjectionEngine] ⚠️ Command Injection 의심! severity={severity}")
+            print(f"[CommandInjectionEngine] Command Injection 의심! severity={severity}")
             print(f"[CommandInjectionEngine] 탐지 결과: {len(findings)}개 발견\n")
             return result
 
@@ -217,9 +199,6 @@ class CommandInjectionEngine(BaseEngine):
         return None
 
     def _extract_analysis_text(self, data: dict) -> str:
-        """
-        이벤트 데이터에서 분석할 텍스트를 추출합니다.
-        """
         event_type = data.get('eventType', '')
 
         # MCP 이벤트
@@ -279,9 +258,6 @@ class CommandInjectionEngine(BaseEngine):
         return str(data)
 
     def _check_dangerous_commands(self, text: str) -> list[str]:
-        """
-        텍스트에서 위험한 명령어를 찾습니다.
-        """
         found = []
         text_lower = text.lower()
 
@@ -293,9 +269,6 @@ class CommandInjectionEngine(BaseEngine):
         return found
 
     def _get_reason(self, pattern: str, category: str) -> str:
-        """
-        패턴에 대한 설명을 반환합니다.
-        """
         reasons = {
             r';\s*(rm|del|format|mkfs)': 'Command chaining with destructive operation',
             r'\|\s*(rm|del|format|mkfs)': 'Pipe to destructive command',

@@ -1,8 +1,3 @@
-"""
-데이터베이스 조회 스크립트
-사용법: python query_db.py
-"""
-
 import asyncio
 import json
 from database import Database
@@ -20,8 +15,8 @@ async def main():
     print("=" * 80)
     print()
 
-    # 1. 통계 조회
-    print("📊 전체 통계:")
+    # 통계 조회
+    print("전체 통계:")
     print("-" * 80)
     stats = await db.get_event_statistics()
     print(f"총 이벤트 수: {stats.get('total_events', 0):,}")
@@ -34,8 +29,8 @@ async def main():
         print(f"  {event_type:20s}: {count:,}")
     print()
 
-    # 2. 최근 이벤트 조회
-    print("📝 최근 이벤트 (10개):")
+    # 최근 이벤트 조회
+    print("최근 이벤트 (10개):")
     print("-" * 80)
     recent = await db.get_recent_events(limit=10)
     for event in recent:
@@ -51,8 +46,8 @@ async def main():
               f"{event['event_type']:15s} | {event['producer']:8s} | {event.get('mcpTag', '-')}")
     print()
 
-    # 3. Semantic Gap 고득점 결과
-    print("🎯 Semantic Gap 고득점 결과:")
+    # Semantic Gap 고득점 결과
+    print("Semantic Gap 결과:")
     print("-" * 80)
     high_scores = await db.get_high_semantic_gap_results(threshold=70, limit=10)
     if high_scores:
@@ -64,11 +59,11 @@ async def main():
         print("  (결과 없음)")
     print()
 
-    # 4. RPC Request-Response 통계
-    print("🔌 RPC Request-Response 통계:")
+    # RPC Request-Response 통계
+    print("RPC Request-Response 통계:")
     print("-" * 80)
 
-    # Step 1. initialize 응답에서 서버 정보 추출 (PID 기반 매핑)
+    # initialize 응답에서 서버 정보 추출
     pid_to_server = {}
     async with db.conn.execute(
         """
@@ -95,7 +90,7 @@ async def main():
                 except json.JSONDecodeError:
                     pass
 
-    # Step 2. message_id → 서버 이름 매핑 (initialize 기반)
+    # message_id → 서버 이름 매핑
     message_id_to_server = {}
     async with db.conn.execute(
         """
@@ -129,7 +124,7 @@ async def main():
             if server_name:
                 message_id_to_server[message_id] = server_name
 
-    # Step 2.5. tools/list 응답 기반 동적 시그니처 학습
+    # tools/list 응답 기반 동적 시그니처 학습
     tool_to_server_counts = defaultdict(Counter)
     async with db.conn.execute(
         """
@@ -161,7 +156,7 @@ async def main():
             except json.JSONDecodeError:
                 continue
 
-    # Step 3. 동적 도구 기반 서버 식별 함수
+    # 동적 도구 기반 서버 식별 함수
     def identify_server_by_tools(tools: list) -> str:
         if not tools:
             return "Unknown"
@@ -176,7 +171,7 @@ async def main():
         best_server, _ = max(total.items(), key=lambda kv: (kv[1], kv[0] or ""))
         return best_server or "Unknown"
 
-    # Step 4. Request 통계 출력
+    # Request 통계 출력
     async with db.conn.execute(
         """
         SELECT method, COUNT(*) AS count
@@ -290,8 +285,8 @@ async def main():
         print("  (결과 없음)")
     print()
 
-    # 5. 파일 이벤트 조회
-    print("📁 파일 작업 통계:")
+    # 파일 이벤트 조회
+    print("파일 작업 통계:")
     print("-" * 80)
     async with db.conn.execute(
         """
@@ -311,7 +306,7 @@ async def main():
     print()
 
     # 6. 엔진별 탐지 통계
-    print("🔍 엔진별 탐지 통계:")
+    print("엔진별 탐지 통계:")
     print("-" * 80)
     async with db.conn.execute(
         """
