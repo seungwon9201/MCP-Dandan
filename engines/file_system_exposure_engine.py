@@ -1,32 +1,15 @@
-# -*- coding: utf-8 -*-
 from engines.base_engine import BaseEngine
 from typing import Any
 import re
 
 
 class FileSystemExposureEngine(BaseEngine):
-    """
-    File System Exposure Detection Engine
-
-    Analyzes MCP and ProxyLog events to detect file system exposure risks.
-    - Sensitive directory path exposure
-    - Absolute path usage
-    - Parent directory traversal
-    - System directory access
-    - User home directory exposure
-    """
 
     def __init__(self, db):
-        """
-        Initialize File System Exposure Detection Engine
-
-        Args:
-            db: Database instance
-        """
         super().__init__(
             db=db,
             name='FileSystemExposureEngine',
-            event_types=['MCP', 'ProxyLog']
+            event_types=['MCP']
         )
 
         # Critical patterns (very dangerous system paths)
@@ -112,9 +95,6 @@ class FileSystemExposureEngine(BaseEngine):
         ]
 
     def process(self, data: Any) -> Any:
-        """
-        Analyze MCP or ProxyLog events to detect File System Exposure
-        """
         print(f"[FileSystemExposureEngine] Input data: {data}")
 
         # Extract paths to analyze
@@ -259,9 +239,6 @@ class FileSystemExposureEngine(BaseEngine):
         return list(set(paths))  # Remove duplicates
 
     def _extract_paths_recursive(self, obj: Any, paths: list):
-        """
-        Recursively extract paths from object
-        """
         if isinstance(obj, dict):
             for key, value in obj.items():
                 if any(k in key.lower() for k in ['path', 'file', 'dir', 'directory', 'location', 'uri']):
@@ -278,9 +255,6 @@ class FileSystemExposureEngine(BaseEngine):
             paths.extend(self._find_paths_in_text(obj))
 
     def _find_paths_in_text(self, text: str) -> list[str]:
-        """
-        Find path patterns in text
-        """
         paths = []
 
         windows_pattern = r'(?:[A-Z]:\\|\\\\)[^\s<>"|?*\n]+'
@@ -298,9 +272,6 @@ class FileSystemExposureEngine(BaseEngine):
         return paths
 
     def _check_sensitive_keywords(self, text: str) -> list[str]:
-        """
-        Find sensitive keywords in text
-        """
         found = []
         text_lower = text.lower()
         for keyword in self.sensitive_keywords:
@@ -309,9 +280,6 @@ class FileSystemExposureEngine(BaseEngine):
         return found
 
     def _get_reason(self, pattern: str, category: str) -> str:
-        """
-        Return description for pattern
-        """
         reasons = {
             # Critical
             r'C:\\Windows\\System32': 'Windows System32 directory exposure',
