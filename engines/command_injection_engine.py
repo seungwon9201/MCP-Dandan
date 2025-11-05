@@ -24,7 +24,7 @@ class CommandInjectionEngine(BaseEngine):
         super().__init__(
             db=db,
             name='CommandInjectionEngine',
-            event_types=['MCP', 'ProxyLog']  # MCP 및 ProxyLog 이벤트 처리
+            event_types=['MCP']  # MCP 및 ProxyLog 이벤트 처리
         )
 
         # Critical 패턴 (매우 위험)

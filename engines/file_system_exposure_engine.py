@@ -26,7 +26,7 @@ class FileSystemExposureEngine(BaseEngine):
         super().__init__(
             db=db,
             name='FileSystemExposureEngine',
-            event_types=['MCP', 'ProxyLog']
+            event_types=['MCP']
         )
 
         # Critical patterns (very dangerous system paths)
