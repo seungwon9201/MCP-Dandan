@@ -102,18 +102,18 @@ class EventHub:
             if 'ts' in original_event:
                 raw_event_id = self.event_id_map.get(original_event['ts'])
 
-            # 엔진 결과 저장
-            engine_result_id = await self.db.insert_engine_result(result, raw_event_id)
+            # mcpTag (serverName) 추출
+            server_name = original_event.get('mcpTag')
 
-            # Semantic Gap 결과인 경우 추가 저장
-            if engine_result_id and result_data.get('detector') == 'SemanticGap':
-                evaluation = result_data.get('evaluation')
-                if evaluation is not None:
-                    await self.db.insert_semantic_gap_result(
-                        engine_result_id,
-                        evaluation,
-                        original_event
-                    )
+            # 엔진 결과 저장
+            engine_result_id = await self.db.insert_engine_result(result, raw_event_id, server_name)
+
+            if not engine_result_id:
+                print(f'✗ engine_result 저장 실패 - engine_result_id가 None')
+                return
+
+            detector = result_data.get('detector')
+            print(f'✓ engine_result 저장 성공 (id={engine_result_id}, detector={detector}, serverName={server_name})')
 
         except Exception as e:
             print(f'결과 저장 오류: {e}')

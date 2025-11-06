@@ -1,6 +1,6 @@
 -- 82ch MCP Observer Database - 간단한 초기화 스크립트
 
--- 1. 원시 이벤트 (mcpTag 추가)
+-- 1. 원시 이벤트 (mcpTag, serverName 추가)
 CREATE TABLE IF NOT EXISTS raw_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts BIGINT NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS raw_events (
     pid INTEGER,
     pname TEXT,
     event_type TEXT NOT NULL,
-    mcpTag TEXT,                     
+    mcpTag TEXT,
     data TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS engine_results (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     raw_event_id INTEGER,
     engine_name TEXT NOT NULL,
-    detected BOOLEAN NOT NULL DEFAULT 0,
+    serverName TEXT,
     severity TEXT,
     score INTEGER,
     detail TEXT,
@@ -80,26 +80,9 @@ CREATE TABLE IF NOT EXISTS engine_results (
     FOREIGN KEY (raw_event_id) REFERENCES raw_events(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_engine_name ON engine_results(engine_name);
-CREATE INDEX IF NOT EXISTS idx_detected ON engine_results(detected);
+CREATE INDEX IF NOT EXISTS idx_serverName ON engine_results(serverName);
 
--- 6. Semantic Gap 결과
-CREATE TABLE IF NOT EXISTS semantic_gap_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    engine_result_id INTEGER NOT NULL,
-    domain_match INTEGER,
-    operation_match INTEGER,
-    argument_specificity INTEGER,
-    consistency INTEGER,
-    penalties TEXT,
-    final_score INTEGER NOT NULL,
-    tool_spec TEXT,
-    event_description TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (engine_result_id) REFERENCES engine_results(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_final_score ON semantic_gap_results(final_score);
-
--- 7. 시스템 메타데이터
+-- 6. 시스템 메타데이터
 CREATE TABLE IF NOT EXISTS system_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,

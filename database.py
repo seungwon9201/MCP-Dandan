@@ -198,77 +198,34 @@ class Database:
             return None
 
     # 엔진 결과 저장
-    async def insert_engine_result(self, result: Dict[str, Any], raw_event_id: int = None) -> Optional[int]:
+    async def insert_engine_result(self, result: Dict[str, Any], raw_event_id: int = None, server_name: str = None) -> Optional[int]:
 
         try:
             result_data = result.get('result', {})
             engine_name = result_data.get('detector', 'Unknown')
-            detected = result.get('detected', False)
             severity = result_data.get('severity')
             score = result_data.get('evaluation') if isinstance(result_data.get('evaluation'), int) else None
             detail = json.dumps(result_data, ensure_ascii=False)
 
+            print(f'[DB] insert_engine_result: engine={engine_name}, serverName={server_name}, severity={severity}')
+
             cursor = await self.conn.execute(
                 """
                 INSERT INTO engine_results
-                (raw_event_id, engine_name, detected, severity, score, detail)
+                (raw_event_id, engine_name, serverName, severity, score, detail)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (raw_event_id, engine_name, detected, severity, score, detail)
+                (raw_event_id, engine_name, server_name, severity, score, detail)
             )
 
             await self.conn.commit()
+            print(f'✓ engine_result 저장 완료: id={cursor.lastrowid}')
             return cursor.lastrowid
 
         except Exception as e:
-            print(f'engine_result 저장 실패: {e}')
-            return None
-
-    # Semantic Gap 결과 저장
-    async def insert_semantic_gap_result(
-        self,
-        engine_result_id: int,
-        evaluation: Any,
-        original_event: Dict[str, Any]
-    ) -> Optional[int]:
-
-        try:
-            # detail_mode인 경우 (dict)
-            if isinstance(evaluation, dict):
-                domain_match = evaluation.get('DomainMatch', 0)
-                operation_match = evaluation.get('OperationMatch', 0)
-                argument_specificity = evaluation.get('ArgumentSpecificity', 0)
-                consistency = evaluation.get('Consistency', 0)
-                penalties = json.dumps(evaluation.get('Penalties', []), ensure_ascii=False)
-                final_score = evaluation.get('Score', 0)
-            else:
-                # 단순 점수 모드
-                domain_match = None
-                operation_match = None
-                argument_specificity = None
-                consistency = None
-                penalties = None
-                final_score = int(evaluation) if evaluation else 0
-
-            tool_spec = json.dumps(original_event.get('data', {}).get('toolSpec'), ensure_ascii=False) if original_event.get('data', {}).get('toolSpec') else None
-            event_description = str(original_event)
-
-            cursor = await self.conn.execute(
-                """
-                INSERT INTO semantic_gap_results
-                (engine_result_id, domain_match, operation_match, argument_specificity,
-                 consistency, penalties, final_score, tool_spec, event_description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (engine_result_id, domain_match, operation_match, argument_specificity,
-                 consistency, penalties, final_score, tool_spec, event_description)
-            )
-
-            await self.conn.commit()
-            return cursor.lastrowid
-
-        except Exception as e:
-            print(f'semantic_gap_result 저장 실패: {e}')
+            print(f'✗ engine_result 저장 실패: {e}')
+            import traceback
+            traceback.print_exc()
             return None
 
     # 조회 메서드
@@ -289,25 +246,6 @@ class Database:
 
         except Exception as e:
             print(f'✗ 이벤트 조회 실패: {e}')
-            return []
-
-    async def get_high_semantic_gap_results(self, threshold: int = 80, limit: int = 100) -> List[Dict[str, Any]]:
-
-        try:
-            async with self.conn.execute(
-                """
-                SELECT * FROM v_high_semantic_gap
-                WHERE final_score >= ?
-                LIMIT ?
-                """,
-                (threshold, limit)
-            ) as cursor:
-                rows = await cursor.fetchall()
-                columns = [description[0] for description in cursor.description]
-                return [dict(zip(columns, row)) for row in rows]
-
-        except Exception as e:
-            print(f'Semantic Gap 결과 조회 실패: {e}')
             return []
 
     async def get_event_statistics(self) -> Dict[str, Any]:
