@@ -3,6 +3,7 @@ from mitmproxy import ctx
 import json
 import time
 import hashlib
+import sys
 
 def load(loader):
     ctx.log.info("[ws_logger] Loaded (inline mode: terminal only)")
@@ -25,6 +26,42 @@ def pretty_json(text: str) -> object:
         return json.loads(text)
     except Exception:
         return text
+
+def safe_print_json(obj):
+    """
+    안전한 출력: 우선 stdout 인코딩을 UTF-8로 재구성 시도,
+    그다음 sys.stdout.buffer에 UTF-8 바이트로 직접 쓰고 flush.
+    실패하면 replacement 모드로 print하여 예외를 피함.
+    """
+    try:
+        # 가능한 경우 표준출력의 인코딩을 UTF-8로 재구성 (Py3.7+)
+        try:
+            if hasattr(sys.stdout, "reconfigure"):
+                sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            # reconfigure 실패해도 무시하고 계속
+            pass
+
+        s = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        # 바이트로 인코딩해서 직접 쓰기 (Windows cp949 문제 회피)
+        try:
+            b = (s + "\n").encode("utf-8")
+            sys.stdout.buffer.write(b)
+            sys.stdout.buffer.flush()
+            return
+        except Exception:
+            # buffer.write 실패하면 다음 폴백으로
+            pass
+
+        # 최후의 수단: replacement 모드로 안전하게 출력
+        safe_s = s.encode("utf-8", errors="replace").decode("utf-8", errors="replace")
+        print(safe_s, flush=True)
+    except Exception:
+        # 절대 예외가 터지면 mitmproxy 프로세스를 멈추지 않도록 무시
+        try:
+            print("[ws_logger] safe_print_json failed", flush=True)
+        except Exception:
+            pass
 
 def websocket_message(flow):
     """WebSocket 메시지를 가로채 콘솔에 바로 출력 (항상 유효한 JSON 한 줄로 출력)"""
@@ -111,5 +148,5 @@ def websocket_message(flow):
         }
     }
 
-    # 항상 한 줄 JSON으로 출력 (한글 포함), 바로 flush
-    print(json.dumps(entry, ensure_ascii=False, separators=(",", ":")), flush=True)
+    # 안전 출력 함수 사용
+    safe_print_json(entry)
