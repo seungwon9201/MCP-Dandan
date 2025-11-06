@@ -75,6 +75,19 @@ function Dashboard({ setSelectedServer, servers }) {
             let severity = 'Low'
             let severityColor = 'bg-yellow-400'
 
+            if (result.engine_name) {
+            const name = result.engine_name.toLowerCase()
+            if (name.includes('tool') || name.includes('poisoning')) {
+              threatType = 'Tool Poisoning'
+            } else if (name.includes('commandinjection')) {
+              threatType = 'Command Injection'
+            } else if (name.includes('filesystemexposure')) {
+              threatType = 'Filesystem Exposure'
+            } else if (name.includes('data') || name.includes('exfiltration')) {
+              threatType = 'Data Exfiltration'
+            }
+          }
+
             if (msg.maliciousScore >= 8) {
               severity = 'High'
               severityColor = 'bg-red-500'
