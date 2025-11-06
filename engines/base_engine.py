@@ -4,22 +4,30 @@ from typing import Any
 
 class BaseEngine(ABC):
 
-    def __init__(self, db, name: str, event_types: list[str] | None = None):
+    def __init__(self, db, name: str, event_types: list[str] | None = None, producers: list[str] | None = None):
         self.db = db
         self.name = name
         self.event_types = event_types or []
+        self.producers = producers or []
 
     def should_process(self, data: dict) -> bool:
-        if not self.event_types:
-            return True  # 모든 이벤트 처리
-        return data.get("eventType") in self.event_types
+        # event_types 필터링
+        if self.event_types and data.get("eventType") not in self.event_types:
+            return False
+
+        # producers 필터링
+        if self.producers and data.get("producer") not in self.producers:
+            return False
+
+        return True
+
     @abstractmethod
     def process(self, data: Any) -> Any:
         raise NotImplementedError
 
     async def handle_event(self, data: Any):
-        # 이벤트 타입 필터링
-        if self.event_types and data.get('eventType') not in self.event_types:
+        # 필터링 체크
+        if not self.should_process(data):
             return None
 
         try:
