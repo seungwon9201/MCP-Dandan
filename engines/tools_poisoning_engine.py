@@ -387,7 +387,7 @@ Content: {desc}
                 tag = " (Retry)" if attempt > 1 else ""
 
                 # Return point
-                print(f"[ToolsPoisoningEngine] Model : {response.model} Time : {current_time} Result(point) : {result}{tag}")
+                print(f"[ToolsPoisoningEngine] Model : {response.model} time {current_time} result : {result}{tag}")
 
                 if self.detail_mode:
                     try:
