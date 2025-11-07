@@ -50,8 +50,8 @@ function Dashboard({ setSelectedServer, servers }) {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/messages`)
-      const allMessages = await response.json()
+      const response = await fetch(`${API_BASE_URL}/engine-results`)
+      const engineResults = await response.json()
 
       // Process data for dashboard
       const events = []
@@ -59,69 +59,84 @@ function Dashboard({ setSelectedServer, servers }) {
       const threatCount = {}
       const threatAffectedServers = {}
 
-      Object.entries(allMessages).forEach(([serverId, messages]) => {
-        const server = servers.find(s => s.id === parseInt(serverId))
-        if (!server) return
+      engineResults.forEach(result => {
+        const serverName = result.serverName || 'Unknown'
 
-        serverDetectionCount[server.name] = 0
+        // Count detections per server
+        serverDetectionCount[serverName] = (serverDetectionCount[serverName] || 0) + 1
 
-        messages.forEach(msg => {
-          if (msg.maliciousScore > 0) {
-            // Count detections per server
-            serverDetectionCount[server.name] = (serverDetectionCount[server.name] || 0) + 1
+        // Determine threat type based on engine_name
+        let threatType = 'Tool Poisoning' // default
+        if (result.engine_name) {
+          const name = result.engine_name.toLowerCase()
+          console.log('Engine name:', result.engine_name, '-> lowercase:', name)
 
-            // Determine threat type based on message type or score
-            let threatType = 'Tool Poisoning'
-            let severity = 'Low'
-            let severityColor = 'bg-yellow-400'
-
-            if (result.engine_name) {
-            const name = result.engine_name.toLowerCase()
-            if (name.includes('tool') || name.includes('poisoning')) {
-              threatType = 'Tool Poisoning'
-            } else if (name.includes('commandinjection')) {
-              threatType = 'Command Injection'
-            } else if (name.includes('filesystemexposure')) {
-              threatType = 'Filesystem Exposure'
-            } else if (name.includes('data') || name.includes('exfiltration')) {
-              threatType = 'Data Exfiltration'
-            }
+          if (name.includes('commandinjection')) {
+            threatType = 'Command Injection'
+            console.log('Matched: Command Injection')
+          } else if (name.includes('filesystemexposure')) {
+            threatType = 'Filesystem Exposure'
+            console.log('Matched: Filesystem Exposure')
+          } else if (name.includes('data') || name.includes('exfiltration')) {
+            threatType = 'Data Exfiltration'
+            console.log('Matched: Data Exfiltration')
+          } else if (name.includes('tool') || name.includes('poisoning')) {
+            threatType = 'Tool Poisoning'
+            console.log('Matched: Tool Poisoning')
+          } else {
+            console.log('No match found for:', name)
           }
+        } else {
+          console.log('No engine_name found in result:', result)
+        }
 
-            if (msg.maliciousScore >= 8) {
-              severity = 'High'
-              severityColor = 'bg-red-500'
-              threatType = msg.type.includes('tool') ? 'Tool Poisoning' : 'Data Exfiltration'
-            } else if (msg.maliciousScore >= 5) {
-              severity = 'Mid'
-              severityColor = 'bg-orange-400'
-              threatType = 'Command Injection'
-            } else {
-              severity = 'Low'
-              severityColor = 'bg-yellow-400'
-              threatType = 'Filesystem Exposure'
-            }
+        // Determine severity based on severity field or score
+        let severity = result.severity || 'low'
+        let severityColor = 'bg-yellow-400'
 
-            // Count threats
-            threatCount[threatType] = (threatCount[threatType] || 0) + 1
+        if (severity.toLowerCase() === 'high' || result.score >= 8) {
+          severity = 'high'
+          severityColor = 'bg-red-500'
+        } else if (severity.toLowerCase() === 'medium' || severity.toLowerCase() === 'mid' || result.score >= 5) {
+          severity = 'mid'
+          severityColor = 'bg-orange-400'
+        } else {
+          severity = 'low'
+          severityColor = 'bg-yellow-400'
+        }
 
-            // Track affected servers per threat
-            if (!threatAffectedServers[threatType]) {
-              threatAffectedServers[threatType] = new Set()
-            }
-            threatAffectedServers[threatType].add(server.name)
+        // Count threats
+        threatCount[threatType] = (threatCount[threatType] || 0) + 1
 
-            events.push({
-              serverName: server.name,
-              serverId: server.id,
-              threatType,
-              severity,
-              severityColor,
-              description: msg.data?.message?.params?.name || '—',
-              lastSeen: msg.timestamp,
-              messageId: msg.id
-            })
+        // Track affected servers per threat
+        if (!threatAffectedServers[threatType]) {
+          threatAffectedServers[threatType] = new Set()
+        }
+        threatAffectedServers[threatType].add(serverName)
+
+        // Parse event data if available
+        let description = result.detail || '—'
+        try {
+          if (result.data) {
+            const eventData = JSON.parse(result.data)
+            description = eventData.message?.params?.name || result.detail || '—'
           }
+        } catch (e) {
+          // Keep default description
+        }
+
+        // Format timestamp
+        const timestamp = result.created_at || new Date(result.ts).toISOString()
+
+        events.push({
+          serverName,
+          serverId: result.serverName, // Use serverName as identifier
+          threatType,
+          severity,
+          severityColor,
+          description,
+          lastSeen: timestamp,
+          engineResultId: result.id
         })
       })
 
@@ -142,14 +157,19 @@ function Dashboard({ setSelectedServer, servers }) {
 
       // Process timeline data (group by date)
       const timelineMap = {}
-      Object.entries(allMessages).forEach(([, messages]) => {
-        messages.forEach(msg => {
-          if (msg.maliciousScore > 0) {
-            // Extract date from timestamp (e.g., "2025-02-16 10:23:15 KST" -> "2025-02-16")
-            const date = msg.timestamp.split(' ')[0]
-            timelineMap[date] = (timelineMap[date] || 0) + 1
-          }
-        })
+      engineResults.forEach(result => {
+        // Extract date from timestamp (e.g., "2025-11-07 04:01:18" -> "2025-11-07")
+        let date
+        if (result.created_at) {
+          date = result.created_at.split(' ')[0]
+        } else if (result.ts) {
+          const d = new Date(result.ts)
+          date = d.toISOString().split('T')[0]
+        }
+
+        if (date) {
+          timelineMap[date] = (timelineMap[date] || 0) + 1
+        }
       })
 
       // Convert to array and sort by date
