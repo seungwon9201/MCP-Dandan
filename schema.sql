@@ -20,6 +20,8 @@ CREATE INDEX IF NOT EXISTS idx_raw_mcpTag ON raw_events(mcpTag);
 -- 2. RPC 이벤트
 CREATE TABLE IF NOT EXISTS rpc_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mcptype TEXT NOT NULL,
+    mcptag TEXT NOT NULL,
     raw_event_id INTEGER,
     ts BIGINT NOT NULL,
     direction TEXT NOT NULL,
@@ -91,3 +93,24 @@ CREATE TABLE IF NOT EXISTS system_metadata (
 
 INSERT OR IGNORE INTO system_metadata (key, value) VALUES ('db_version', '1.0');
 INSERT OR IGNORE INTO system_metadata (key, value) VALUES ('created_at', datetime('now'));
+
+-- -- 7. MCPL(tools/call)
+Create table if not exists mcpl (
+    mcpTag TEXT NOT NULL    ,  -- mcpTag
+    producer TEXT NOT NULL  ,  -- producer
+    tool TEXT PRIMARY key   ,  -- name
+    tool_title TEXT         ,  -- title
+    tool_description TEXT   ,  -- description
+    tool_parameter TEXT     ,  -- inputschema
+    annotations TEXT        ,  -- annotations
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- -- MCPL Schema(chiled table) 
+-- Create table if not exists mcpl_schemas (
+--     tool text PRIMARY key,
+--     schema_tyep text not null, -- e.g., object 
+--     properties text,
+--     created_at DATATIME DEFAULT CURRENT_TIMESTAMP
+--     FOREIGN KEY (tool) REFERENCES mcpl_event(tool) ON DELETE CASCADE
+-- );

@@ -32,6 +32,9 @@ class BaseEngine(ABC):
 
         try:
             result = self.process(data)
+            # process() Routine Chekc >> await
+            if hasattr(result, '__await__'):
+                result = await result
             return result
         except Exception as e:
             try:

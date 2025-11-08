@@ -61,16 +61,12 @@ class ZeroMQSource:
             if await self.socket.poll(timeout=int(timeout * 1000)):  # ms로 변환
                 # multipart 메시지 수신
                 message = await self.socket.recv_multipart()
-                
                 if len(message) < 2:
                     return None
-                
                 # topic은 무시, data만 사용
                 json_data = message[1].decode('utf-8')
-                
                 # JSON 파싱 및 검증
-                data = json.loads(json_data)
-                
+                data = json.loads(json_data)               
                 # eventType 필드 확인
                 if "eventType" in data:
                     return data

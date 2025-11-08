@@ -80,24 +80,8 @@ async def main():
         )
     print()
 
-    # Semantic Gap 결과
-    print("Semantic Gap 결과:")
-    print("-" * 80)
-    try:
-        high_scores = await db.get_high_semantic_gap_results(threshold=70, limit=10)
-        if high_scores:
-            for result in high_scores:
-                score = result.get("final_score", 0)
-                event_type = result.get("event_type", "Unknown")
-                print(f"점수: {score:3d} | 타입: {event_type}")
-        else:
-            print("  (결과 없음)")
-    except Exception as e:
-        print(f"Semantic Gap 결과 조회 실패: {e}")
-    print()
-
-    # RPC Request-Response 통계
-    print("RPC Request-Response 통계:")
+    # 4. RPC Request-Response 통계
+    print("🔌 RPC Request-Response 통계:")
     print("-" * 80)
     
     # initialize 응답에서 서버 정보 추출
