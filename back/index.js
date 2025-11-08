@@ -2,7 +2,6 @@ const express = require('express')
 const cors = require('cors')
 const Database = require('better-sqlite3')
 const path = require('path')
-const { mcpServers, chatMessagesByServer } = require('./mockData')
 
 const app = express()
 const PORT = 3001
@@ -33,16 +32,64 @@ try {
 app.use(cors())
 app.use(express.json())
 
+// Helper function to build mcpServers from database
+function getMcpServersFromDB() {
+  try {
+    const query = `
+      SELECT
+        mcpTag,
+        producer,
+        tool_title,
+        tool_description,
+        tool_parameter,
+        annotations,
+        created_at
+      FROM mcpl
+      ORDER BY mcpTag, created_at
+    `
+    const rows = db.prepare(query).all()
+
+    // Group tools by mcpTag (server name)
+    const serverMap = new Map()
+
+    rows.forEach(row => {
+      const serverName = row.mcpTag
+
+      if (!serverMap.has(serverName)) {
+        serverMap.set(serverName, {
+          id: serverMap.size + 1,
+          name: serverName,
+          type: row.producer || 'local',
+          tools: []
+        })
+      }
+
+      const server = serverMap.get(serverName)
+      server.tools.push({
+        name: row.tool_title,
+        description: row.tool_description || ''
+      })
+    })
+
+    return Array.from(serverMap.values())
+  } catch (error) {
+    console.error('Error fetching MCP servers from database:', error)
+    return []
+  }
+}
+
 // API Routes
 
 // Get all MCP servers
 app.get('/api/servers', (req, res) => {
+  const mcpServers = getMcpServersFromDB()
   res.json(mcpServers)
 })
 
 // Get a single server by ID
 app.get('/api/servers/:id', (req, res) => {
   const serverId = parseInt(req.params.id)
+  const mcpServers = getMcpServersFromDB()
   const server = mcpServers.find(s => s.id === serverId)
 
   if (!server) {
@@ -54,14 +101,138 @@ app.get('/api/servers/:id', (req, res) => {
 
 // Get messages for a specific server
 app.get('/api/servers/:id/messages', (req, res) => {
-  const serverId = parseInt(req.params.id)
-  const messages = chatMessagesByServer[serverId] || []
-  res.json(messages)
+  try {
+    const serverId = parseInt(req.params.id)
+
+    // First, get the server name from mcpServers
+    const mcpServers = getMcpServersFromDB()
+    const server = mcpServers.find(s => s.id === serverId)
+
+    if (!server) {
+      return res.status(404).json({ error: 'Server not found' })
+    }
+
+    // Query raw_events table for messages with matching mcpTag
+    const query = `
+      SELECT
+        id,
+        ts,
+        producer,
+        pid,
+        pname,
+        event_type,
+        mcpTag,
+        data,
+        created_at
+      FROM raw_events
+      WHERE mcpTag = ? AND event_type = 'MCP'
+      ORDER BY id ASC
+    `
+
+    const rows = db.prepare(query).all(server.name)
+
+    // Transform database rows to match frontend expected format
+    const messages = rows.map(row => {
+      let parsedData = {}
+      try {
+        parsedData = typeof row.data === 'string' ? JSON.parse(row.data) : row.data
+      } catch (e) {
+        console.error('Error parsing data for event:', row.id, e)
+        parsedData = { raw: row.data }
+      }
+
+      // Determine message type from data
+      let messageType = row.event_type
+      if (parsedData.message && parsedData.message.method) {
+        messageType = parsedData.message.method
+      }
+
+      // Determine sender from data (src field: client or server)
+      const sender = parsedData.src || 'unknown'
+
+      // Calculate maliciousScore (placeholder - should come from analysis)
+      const maliciousScore = 0
+
+      return {
+        id: row.id,
+        type: messageType,
+        sender: sender,
+        timestamp: row.created_at || new Date(row.ts).toISOString(),
+        maliciousScore: maliciousScore,
+        data: {
+          message: parsedData.message || parsedData
+        }
+      }
+    })
+
+    res.json(messages)
+  } catch (error) {
+    console.error('Error fetching messages:', error)
+    res.status(500).json({ error: 'Failed to fetch messages' })
+  }
 })
 
 // Get all messages (for all servers)
 app.get('/api/messages', (req, res) => {
-  res.json(chatMessagesByServer)
+  try {
+    const query = `
+      SELECT
+        id,
+        ts,
+        producer,
+        pid,
+        pname,
+        event_type,
+        mcpTag,
+        data,
+        created_at
+      FROM raw_events
+      WHERE event_type = 'MCP'
+      ORDER BY id ASC
+    `
+
+    const rows = db.prepare(query).all()
+
+    // Transform database rows to match frontend expected format
+    const messages = rows.map(row => {
+      let parsedData = {}
+      try {
+        parsedData = typeof row.data === 'string' ? JSON.parse(row.data) : row.data
+      } catch (e) {
+        console.error('Error parsing data for event:', row.id, e)
+        parsedData = { raw: row.data }
+      }
+
+      // Determine message type from data
+      let messageType = row.event_type
+      if (parsedData.message && parsedData.message.method) {
+        messageType = parsedData.message.method
+      }
+
+      // Determine sender from data (src field: client or server)
+      const sender = parsedData.src || 'unknown'
+
+      // Calculate maliciousScore (placeholder - should come from analysis)
+      const maliciousScore = 0
+
+      return {
+        id: row.id,
+        type: messageType,
+        sender: sender,
+        timestamp: row.created_at || new Date(row.ts).toISOString(),
+        maliciousScore: maliciousScore,
+        mcpTag: row.mcpTag,
+        data: {
+          message: parsedData.message || parsedData
+        }
+      }
+    })
+
+    res.json(messages)
+  } catch (error) {
+    console.error('Error fetching all messages:', error)
+    res.status(500).json({ error: 'Failed to fetch all messages' })
+  }
 })
 
 // Get all engine results (for Dashboard Detected section)
