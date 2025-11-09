@@ -91,14 +91,7 @@ async def handle_http_only_message(request):
                 'Content-Type': 'application/json',
                 'Accept': 'application/json, text/event-stream'
             }
-
-            # Forward MCP-Protocol-Version header if present
-            if 'MCP-Protocol-Version' in request.headers:
-                headers_to_send['MCP-Protocol-Version'] = request.headers['MCP-Protocol-Version']
-                print(f"[HTTP-Only] Forwarding MCP-Protocol-Version: {request.headers['MCP-Protocol-Version']}")
-
-            headers_to_send.update(target_headers)
-
+            
             async with session.post(
                 target_url,
                 json=message,
