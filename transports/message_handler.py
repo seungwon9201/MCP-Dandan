@@ -54,7 +54,12 @@ async def handle_message_endpoint(request):
             content_type='application/json'
         )
 
-    print(f"[Message] Received: method={message.get('method')}, id={message.get('id')}")
+    # Check if this is a notification (no id field)
+    is_notification = 'id' not in message
+    msg_type = "Notification" if is_notification else "Request"
+
+    print(f"[Message] {msg_type}: method={message.get('method')}, id={message.get('id', 'N/A')}")
+    print(f"[Message] Payload: {json.dumps(message, indent=2)}")
 
     # Find matching SSE connection
     connection = await state.find_sse_connection(server_name, app_name)
@@ -68,6 +73,22 @@ async def handle_message_endpoint(request):
         )
 
     target_url = connection.target_url
+    target_headers = getattr(connection, 'target_headers', {})
+
+    # Check if this is an SSE-only server with message queue
+    if hasattr(connection, 'message_queue') and connection.message_queue is not None:
+        print(f"[Message] Using SSE bidirectional mode (message queue)")
+        # Put message in queue for SSE handler to send
+        await connection.message_queue.put(message)
+        # For SSE-only servers, the response comes back via SSE, not HTTP
+        # Return 202 Accepted
+        return aiohttp.web.Response(
+            status=202,
+            text="",
+            content_type='application/json'
+        )
+
+    print(f"[Message] Target headers to forward: {list(target_headers.keys())}")
 
     # Verify tool calls
     if message.get('method') == 'tools/call' and message.get('params'):
@@ -140,16 +161,32 @@ async def handle_message_endpoint(request):
 
     try:
         async with aiohttp.ClientSession() as session:
+            # Merge default headers with custom headers
+            headers_to_send = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json, text/event-stream'
+            }
+
+            # Forward MCP-Protocol-Version header if present
+            if 'MCP-Protocol-Version' in request.headers:
+                headers_to_send['MCP-Protocol-Version'] = request.headers['MCP-Protocol-Version']
+                print(f"[Message] Forwarding MCP-Protocol-Version: {request.headers['MCP-Protocol-Version']}")
+
+            headers_to_send.update(target_headers)
+
             async with session.post(
                 message_endpoint,
                 json=message,
-                headers={'Content-Type': 'application/json'}
+                headers=headers_to_send
             ) as response:
                 if response.status != 200:
+                    error_text = await response.text()
                     print(f"[Message] Target returned HTTP {response.status}")
+                    print(f"[Message] Error response: {error_text}")
+                    print(f"[Message] Response headers: {dict(response.headers)}")
                     return aiohttp.web.Response(
                         status=response.status,
-                        text=await response.text(),
+                        text=error_text,
                         content_type='application/json'
                     )
 
@@ -161,9 +198,19 @@ async def handle_message_endpoint(request):
                         content_type='application/json'
                     )
 
+                # Handle 202 or notifications (no response body expected)
+                if is_notification:
+                    print(f"[Message] Notification forwarded successfully")
+                    return aiohttp.web.Response(
+                        status=202,
+                        text="",
+                        content_type='application/json'
+                    )
+
                 # Get response data
                 response_data = await response.json()
                 print(f"[Message] Received response from target")
+                print(f"[Message] Response payload: {json.dumps(response_data, indent=2)}")
 
                 # Verify tool response if this was a tool call
                 call_key = state.get_call_key(message.get('id'), server_name, app_name)

@@ -18,7 +18,10 @@ class SSEConnection:
     target_url: str
     client_response: Any  # aiohttp StreamResponse
     connection_id: str
+    target_headers: Dict[str, str] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
+    target_session: Any = None  # aiohttp ClientSession for SSE-only servers
+    message_queue: Any = None  # asyncio.Queue for sending messages to target
 
 
 @dataclass
@@ -145,13 +148,20 @@ class GlobalState:
         server_name: str,
         app_name: Optional[str] = None
     ) -> Optional[SSEConnection]:
-        """Find an active SSE connection by server and app name."""
+        """Find an active SSE connection by server and app name. Returns the most recent one."""
         async with self._lock:
+            matching_connections = []
             for conn in self.sse_connections.values():
                 if conn.server_name == server_name:
                     if app_name is None or conn.app_name == app_name:
-                        return conn
-            return None
+                        matching_connections.append(conn)
+
+            if not matching_connections:
+                return None
+
+            # Return the most recent connection (sorted by created_at descending)
+            matching_connections.sort(key=lambda c: c.created_at, reverse=True)
+            return matching_connections[0]
 
 
 # Global state instance

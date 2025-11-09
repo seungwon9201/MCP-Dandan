@@ -10,6 +10,7 @@ from aiohttp import web
 
 from transports.sse_transport import handle_sse_connection
 from transports.message_handler import handle_message_endpoint
+from transports.http_only_handler import handle_http_only_message
 from transports.stdio_handlers import (
     handle_verify_request,
     handle_verify_response,
@@ -51,6 +52,10 @@ def setup_routes(app):
     # Format: /{appName}/{serverName}/message (POST)
     app.router.add_post('/{app}/{server}/message', handle_message_endpoint)
 
+    # HTTP-only transport endpoint (no SSE)
+    # Format: /{appName}/{serverName}/mcp (POST)
+    app.router.add_post('/{app}/{server}/mcp', handle_http_only_message)
+
     print(f"[Server] Routes configured:")
     print(f"  GET  /health - Health check")
     print(f"  POST /verify/request - STDIO verification API")
@@ -58,6 +63,7 @@ def setup_routes(app):
     print(f"  POST /register-tools - Tool registration")
     print(f"  GET  /{{app}}/{{server}}/sse - SSE connection endpoint")
     print(f"  POST /{{app}}/{{server}}/message - Message endpoint")
+    print(f"  POST /{{app}}/{{server}}/mcp - HTTP-only endpoint (no SSE)")
 
 
 async def on_startup(app):
