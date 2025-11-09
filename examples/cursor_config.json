@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "gmail-hbg780-45": {
+      "url": "https://mcp.composio.dev/partner/composio/gmail/mcp?customerId=eaee1d6c-c910-4dc6-a31a-29ac1ef6cb1c&agent=cursor"
+    },
+    "github": {
+      "command": "python",
+      "args": [
+        "C:\\Paths\\to\\82ch-observer\\cli_proxy.py",
+        "C:\\Program Files\\nodejs\\npx.cmd",
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "MCP_DEFENDER_APP_NAME": "Cursor",
+        "MCP_DEFENDER_SERVER_NAME": "github",
+        "MCP_DEBUG": "true",
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
+      }
+    },
+    "coingecko-mcp": {
+      "url": "https://mcp.api.coingecko.com/sse"
+    }
+  }
+}
