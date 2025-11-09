@@ -29,7 +29,7 @@ class EngineServer:
         if self.config.get_tools_poisoning_enabled():
             engine = ToolsPoisoningEngine(
                 self.db,
-                detail_mode=False
+                detail_mode=True
             )
             self.engines.append(engine)
 

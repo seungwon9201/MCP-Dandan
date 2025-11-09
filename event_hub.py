@@ -120,16 +120,6 @@ class EventHub:
             # 엔진 결과 저장
             engine_result_id = await self.db.insert_engine_result(result, raw_event_id, server_name, producer)
 
-            # Tools Poisoning 결과인 경우 추가 저장
-            if engine_result_id and result_data.get('detector') == 'ToolsPoisoning':
-                evaluation = result_data.get('evaluation')
-                if evaluation is not None:
-                    await self.db.insert_tools_poisoning_result(
-                        engine_result_id,
-                        evaluation,
-                        original_event
-                    )
-
             if not engine_result_id:
                 print(f'✗ engine_result 저장 실패 - engine_result_id가 None')
                 return

@@ -42,7 +42,9 @@ Hard caps/floors and penalties:
 - Clip the final score to [1,100].
 
 Output constraint:
-Return ONLY the final integer (1–100). Do not include any words, symbols, JSON, or explanations.
+Return ONLY a simple format: DomainMatch OperationMatch ArgumentSpecificity Consistency Total
+Example: 35 30 12 8 85
+Do not include any words, labels, or explanations. Just five space-separated integers.
 """
 
     # 세부 JSON 결과 버전
@@ -106,7 +108,7 @@ Output format (JSON only, no extra text):
         self.system_prompt = (
             self.SYSTEM_PROMPT_DETAIL if detail_mode else self.SYSTEM_PROMPT_INT
         )
-        self.retry_count = 2
+        self.retry_count = 3
 
         # tools/call Request/Response 페어링용
         self.pending_requests = {}  # {(mcpTag, message_id): request_event}
@@ -171,6 +173,33 @@ Output format (JSON only, no extra text):
             print("[ToolsPoisoningEngine] ERROR:LLM Analysis Failed.")
             return None
 
+        # Score 추출 및 severity 계산
+        score = None
+        severity = None
+        detail = None
+
+        if isinstance(result, dict):
+            score = result.get('Score')
+            # detail_mode=True인 경우 JSON 전체를 detail로 저장
+            detail = result
+        elif isinstance(result, int):
+            score = result
+
+        if score is not None:
+            # Score 기반 severity 분류
+            if score >= 80:
+                severity = 'none'
+            elif score >= 60:
+                severity = 'low'
+            elif score >= 40:
+                severity = 'medium'
+            else:
+                severity = 'high'
+        # 일단 저장
+        # # severity가 'none'인 경우 DB Insert X (정상 케이스)
+        # if severity == 'none':
+        #     return None
+
         # reference 생성
         references = []
         if 'ts' in paired_event:
@@ -182,6 +211,8 @@ Output format (JSON only, no extra text):
             'result': {
                 'detector': 'ToolsPoisoning',
                 'evaluation': result,
+                'severity': severity,
+                'detail': detail,
                 'event_type': 'MCP_ToolCall_Pair',
                 'detail_mode': self.detail_mode,
                 'original_event': paired_event,
@@ -383,27 +414,57 @@ Content: {desc}
                 )
 
                 result = response.choices[0].message.content.strip()
+                # print(result)  # 디버깅용 - 필요시 주석 해제
                 current_time = strftime("%H:%M:%S", localtime())
                 tag = " (Retry)" if attempt > 1 else ""
 
-                # Return point
-                print(f"[ToolsPoisoningEngine] Model : {response.model} time {current_time} result : {result}{tag}")
-
+                # Return point - 출력 로직
                 if self.detail_mode:
                     try:
-                        return json.loads(result)
-                    except Exception:
+                        # Markdown code block 제거 (```json ... ```)
+                        json_str = result
+                        if result.startswith('```'):
+                            # ```json 또는 ``` 로 시작하는 경우
+                            lines = result.split('\n')
+                            json_str = '\n'.join(lines[1:-1])  # 첫 줄과 마지막 줄 제거
+
+                        parsed_result = json.loads(json_str)
+                        score = parsed_result.get('Score', 'N/A')
+
+                        # Score와 함께 전체 JSON 출력
+                        print(f"[ToolsPoisoningEngine] Model: {response.model} time: {current_time} Score: {score}{tag}")
+                        print(f"                       Detail: {json.dumps(parsed_result, indent=2, ensure_ascii=False)}")
+                        return parsed_result
+                    except Exception as e:
+                        print(f"[ToolsPoisoningEngine] Model: {response.model} time: {current_time} JSON Parse Error: {e}")
+                        print(f"                       Raw result: {result[:200]}")
                         return result
                 else:
                     try:
-                        return int(result)
+                        # 공백으로 구분된 5개 정수 파싱: DomainMatch OperationMatch ArgumentSpecificity Consistency Total
+                        parts = result.split()
+                        if len(parts) == 5:
+                            domain, operation, argument, consistency, score = map(int, parts)
+                            detail_str = f"DomainMatch({domain}/40) OperationMatch({operation}/35) ArgumentSpecificity({argument}/15) Consistency({consistency}/10) Total({score}/100)"
+                            print(f"[ToolsPoisoningEngine] Model: {response.model} time: {current_time} Score: {score}{tag}")
+                            print(f"                       Detail: {detail_str}")
+                            return score
+                        else:
+                            # 단일 정수인 경우 (이전 형식 호환)
+                            score = int(result)
+                            print(f"[ToolsPoisoningEngine] Model: {response.model} time: {current_time} Score: {score}{tag}")
+                            return score
                     except Exception:
+                        print(f"[ToolsPoisoningEngine] Model: {response.model} time: {current_time} result: {result}{tag}")
                         return result
 
             except SDKError as e:
                 print(f"[ToolsPoisoningEngine] ERROR - Attempt {attempt}/{self.retry_count} – {e}")
                 if attempt < self.retry_count:
-                    time.sleep(1)
+                    # 지수 백오프: 2^attempt 초 대기 (2초, 4초, 8초...)
+                    wait_time = 2 ** attempt
+                    print(f"[ToolsPoisoningEngine] Waiting {wait_time}s before retry...")
+                    time.sleep(wait_time)
 
         print("[ToolsPoisoningEngine] FAIL - All retry attempts failed.")
         return None

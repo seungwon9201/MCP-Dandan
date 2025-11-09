@@ -225,14 +225,28 @@ class Database:
             result_data = result.get('result', {})
             engine_name = result_data.get('detector', 'Unknown')
             severity = result_data.get('severity')
-            score = result_data.get('evaluation') if isinstance(result_data.get('evaluation'), int) else None
 
-            # findings에서 reason만 추출
-            findings = result_data.get('findings', [])
-            reasons = [finding.get('reason', '') for finding in findings if isinstance(finding, dict)]
-            detail = json.dumps(reasons, ensure_ascii=False) if reasons else None
+            # score 추출
+            evaluation = result_data.get('evaluation')
+            if isinstance(evaluation, dict):
+                score = evaluation.get('Score')
+            elif isinstance(evaluation, int):
+                score = evaluation
+            else:
+                score = None
 
-            print(f'[DB] insert_engine_result: engine={engine_name}, serverName={server_name}, severity={severity}')
+            # detail 처리
+            detail_data = result_data.get('detail')
+            if detail_data:
+                # ToolsPoisoning 등에서 detail 필드로 보낸 경우
+                detail = json.dumps(detail_data, ensure_ascii=False) if isinstance(detail_data, dict) else str(detail_data)
+            else:
+                # findings에서 reason만 추출 (다른 엔진용)
+                findings = result_data.get('findings', [])
+                reasons = [finding.get('reason', '') for finding in findings if isinstance(finding, dict)]
+                detail = json.dumps(reasons, ensure_ascii=False) if reasons else None
+
+            print(f'[DB] insert_engine_result: engine={engine_name}, serverName={server_name}, severity={severity} score={score} detail={detail[:100] if detail else None}...')
 
             cursor = await self.conn.execute(
                 """
