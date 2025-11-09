@@ -11,72 +11,7 @@ from typing import Optional
 from datetime import datetime
 
 from state import state, SSEConnection
-from verification import verify_tool_response
 from transports.sse_bidirectional import handle_sse_bidirectional, write_chunked
-
-
-async def query_server_tools(target_url: str, server_name: str, app_name: str):
-    """
-    Query tools from the target MCP server using tools/list.
-
-    Args:
-        target_url: Target server's SSE URL
-        server_name: Name of the MCP server
-        app_name: Name of the application
-    """
-    try:
-        print(f"[Tools] Querying tools from {server_name} at {target_url}")
-
-        # Convert SSE URL to message endpoint
-        message_endpoint = target_url.replace('/sse', '/message')
-
-        # Create tools/list JSON-RPC request
-        request_id = f"mcp-proxy-tools-list-{int(datetime.now().timestamp() * 1000)}"
-        list_request = {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": "tools/list",
-            "params": {}
-        }
-
-        # Send request with timeout
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                message_endpoint,
-                json=list_request,
-                timeout=aiohttp.ClientTimeout(total=5)
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    print(f"[Message] Target returned HTTP {response.status}")
-                    print(f"[Message] Error response: {error_text}")
-                    print(f"[Message] Response headers: {dict(response.headers)}")
-                    return aiohttp.web.Response(
-                        status=response.status,
-                        text=error_text,
-                        content_type='application/json',
-                    )
-
-                data = await response.json()
-
-                if data.get('result') and data['result'].get('tools'):
-                    tools = data['result']['tools']
-                    print(f"[Tools] Discovered {len(tools)} tools from {server_name}")
-
-                    # Register tools in state
-                    await state.register_tools(
-                        app_name=app_name,
-                        server_name=server_name,
-                        tools=tools,
-                        server_info={"name": server_name, "version": "unknown"}
-                    )
-                else:
-                    print(f"[Tools] Invalid tools/list response from {server_name}")
-
-    except asyncio.TimeoutError:
-        print(f"[Tools] Tool query to {server_name} timed out")
-    except Exception as e:
-        print(f"[Tools] Error querying tools from {server_name}: {e}")
 
 
 async def handle_sse_connection(request):
@@ -150,12 +85,17 @@ async def handle_sse_connection(request):
         if target_url:
             print(f"[SSE] Using target URL from environment variable: {target_url}")
 
-    # 4. Check state configuration
+    # 4. Require target URL
     if not target_url:
-        # TODO: Look up from state.protected_servers[app_name]
-        # For now, use default
-        target_url = 'http://localhost:3001/sse'
-        print(f"[SSE] Using default target URL")
+        print(f"[SSE] Error: No target URL specified for {app_name}/{server_name}")
+        return aiohttp.web.Response(
+            status=400,
+            text=json.dumps({
+                "error": "No target URL specified",
+                "message": "Please provide target URL via query parameter (?target=), header (X-MCP-Target-URL), or environment variable (MCP_TARGET_URL)"
+            }),
+            content_type='application/json'
+        )
 
     print(f"[SSE] Final target URL: {target_url}")
 

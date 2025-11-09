@@ -6,7 +6,6 @@ Handles POST requests to the message endpoint for tool calls.
 
 import aiohttp
 import json
-from typing import Optional
 
 from state import state
 from verification import verify_tool_call, verify_tool_response

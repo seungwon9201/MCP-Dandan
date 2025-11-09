@@ -8,7 +8,6 @@ not HTTP POST /message endpoint.
 import aiohttp
 import asyncio
 import json
-from typing import Optional
 
 
 async def write_chunked(response, data: str, chunk_size: int = 4000):
