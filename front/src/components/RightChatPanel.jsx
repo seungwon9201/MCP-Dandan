@@ -43,7 +43,7 @@ function RightChatPanel({ messages, selectedMessage, setSelectedMessage }) {
           }
 
           // For server messages with id, find the corresponding client message
-          if (!isClientMessage && message.data?.message?.id) {
+          if (!isClientMessage && message.data?.message?.id !== undefined) {
             const requestId = message.data.message.id
             // Find the most recent client message with matching id
             const clientMessage = messages
