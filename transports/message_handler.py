@@ -1,0 +1,230 @@
+"""
+Message endpoint handler for MCP HTTP+SSE protocol.
+
+Handles POST requests to the message endpoint for tool calls.
+"""
+
+import aiohttp
+import json
+from typing import Optional
+
+from state import state
+from verification import verify_tool_call, verify_tool_response
+
+
+async def handle_message_endpoint(request):
+    """
+    Handle POST requests to message endpoint (/{app}/{server}/message).
+
+    This function:
+    1. Receives JSON-RPC tool call from client
+    2. Verifies the tool call
+    3. Forwards to target server if allowed
+    4. Receives response from target
+    5. Verifies the response
+    6. Returns to client if allowed
+
+    Args:
+        request: aiohttp Request object
+
+    Returns:
+        JSON response
+    """
+    # Extract app and server names from URL
+    path_parts = request.path.strip('/').split('/')
+    if len(path_parts) < 3 or path_parts[-1] != 'message':
+        return aiohttp.web.Response(
+            status=400,
+            text=json.dumps({"error": "Invalid path format"}),
+            content_type='application/json'
+        )
+
+    app_name = path_parts[0]
+    server_name = path_parts[1]
+
+    print(f"[Message] Handling message for {app_name}/{server_name}")
+
+    # Parse request body
+    try:
+        message = await request.json()
+    except Exception as e:
+        return aiohttp.web.Response(
+            status=400,
+            text=json.dumps({"error": "Invalid JSON"}),
+            content_type='application/json'
+        )
+
+    print(f"[Message] Received: method={message.get('method')}, id={message.get('id')}")
+
+    # Find matching SSE connection
+    connection = await state.find_sse_connection(server_name, app_name)
+
+    if not connection:
+        print(f"[Message] No active SSE connection found for {server_name}")
+        return aiohttp.web.Response(
+            status=404,
+            text=json.dumps({"error": "SSE connection not found"}),
+            content_type='application/json'
+        )
+
+    target_url = connection.target_url
+
+    # Verify tool calls
+    if message.get('method') == 'tools/call' and message.get('params'):
+        try:
+            tool_name = message['params'].get('name')
+            tool_args = message['params'].get('arguments', {})
+
+            # Track the tool call
+            call_key = await state.track_tool_call(
+                tool_name=tool_name,
+                request_id=message.get('id'),
+                server_name=server_name,
+                app_name=app_name,
+                args=tool_args
+            )
+
+            print(f"[Message] Tracking tool call: {tool_name} as {call_key}")
+
+            # Verify the tool call
+            server_info = {
+                "serverName": server_name,
+                "appName": app_name,
+                "serverVersion": "unknown"
+            }
+
+            verification = await verify_tool_call(
+                tool_name=tool_name,
+                tool_args=tool_args,
+                server_info=server_info,
+                user_intent=""  # HTTP+SSE doesn't have user_intent
+            )
+
+            if not verification.allowed:
+                print(f"[Message] Tool call blocked: {verification.reason}")
+                await state.remove_pending_call(call_key)
+
+                return aiohttp.web.Response(
+                    status=200,
+                    text=json.dumps({
+                        "jsonrpc": "2.0",
+                        "id": message.get('id'),
+                        "error": {
+                            "code": -32000,
+                            "message": f"Tool call blocked: {verification.reason}"
+                        }
+                    }),
+                    content_type='application/json'
+                )
+
+            # Cleanup stale calls periodically
+            await state.cleanup_stale_calls()
+
+        except Exception as e:
+            print(f"[Message] Error during verification: {e}")
+
+    # Forward request to target server
+    # Convert SSE URL to message endpoint
+    # Some servers use /sse, others don't have it
+    if target_url.endswith('/sse'):
+        message_endpoint = target_url.replace('/sse', '/message')
+    elif '/sse?' in target_url:
+        # Handle query parameters after /sse
+        message_endpoint = target_url.replace('/sse?', '/message?')
+    else:
+        # URL doesn't have /sse, try to find the right endpoint
+        # For servers like composio/coingecko that don't use /sse suffix
+        message_endpoint = target_url
+
+    print(f"[Message] Forwarding to target: {message_endpoint}")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                message_endpoint,
+                json=message,
+                headers={'Content-Type': 'application/json'}
+            ) as response:
+                if response.status != 200:
+                    print(f"[Message] Target returned HTTP {response.status}")
+                    return aiohttp.web.Response(
+                        status=response.status,
+                        text=await response.text(),
+                        content_type='application/json'
+                    )
+
+                # Handle 202 Accepted (no body)
+                if response.status == 202:
+                    return aiohttp.web.Response(
+                        status=202,
+                        text="",
+                        content_type='application/json'
+                    )
+
+                # Get response data
+                response_data = await response.json()
+                print(f"[Message] Received response from target")
+
+                # Verify tool response if this was a tool call
+                call_key = state.get_call_key(message.get('id'), server_name, app_name)
+                pending_call = await state.get_pending_call(call_key)
+
+                if pending_call and response_data.get('result'):
+                    try:
+                        tool_name = pending_call.tool_name
+                        server_info = {
+                            "serverName": server_name,
+                            "appName": app_name,
+                            "serverVersion": "unknown"
+                        }
+
+                        verification = await verify_tool_response(
+                            tool_name=tool_name,
+                            response_data=response_data.get('result'),
+                            server_info=server_info
+                        )
+
+                        if not verification.allowed:
+                            print(f"[Message] Response blocked: {verification.reason}")
+                            await state.remove_pending_call(call_key)
+
+                            return aiohttp.web.Response(
+                                status=200,
+                                text=json.dumps({
+                                    "jsonrpc": "2.0",
+                                    "id": message.get('id'),
+                                    "error": {
+                                        "code": -32000,
+                                        "message": f"Response blocked: {verification.reason}"
+                                    }
+                                }),
+                                content_type='application/json'
+                            )
+
+                        # Remove from pending calls
+                        await state.remove_pending_call(call_key)
+
+                    except Exception as e:
+                        print(f"[Message] Error verifying response: {e}")
+
+                # Return response to client
+                return aiohttp.web.Response(
+                    status=200,
+                    text=json.dumps(response_data),
+                    content_type='application/json'
+                )
+
+    except Exception as e:
+        print(f"[Message] Error forwarding to target: {e}")
+        return aiohttp.web.Response(
+            status=502,
+            text=json.dumps({
+                "jsonrpc": "2.0",
+                "id": message.get('id'),
+                "error": {
+                    "code": -32000,
+                    "message": f"Error communicating with target: {str(e)}"
+                }
+            }),
+            content_type='application/json'
+        )
