@@ -12,7 +12,6 @@ import subprocess
 import asyncio
 import requests
 from typing import Optional, Dict, Any
-from event_publisher import get_publisher
 
 
 # Configuration
@@ -74,7 +73,6 @@ class MCPState:
 
 
 state = MCPState()
-publisher = get_publisher()
 
 
 def process_request(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -99,15 +97,6 @@ def process_request(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             state.current_tool_id = message.get('id')
 
             log('INFO', f"Verifying tool call: {state.current_tool_name}")
-
-            # Publish MCP event to stdout for Electron
-            publisher.publish_mcp_event(
-                direction='request',
-                message=message,
-                app_name=CONFIG['app_name'],
-                server_name=CONFIG['server_name'],
-                tool_name=state.current_tool_name
-            )
 
             # Send for verification
             verification_data = {
@@ -245,15 +234,6 @@ def process_response(message: Dict[str, Any]) -> Dict[str, Any]:
             message.get('result')):
 
             log('DEBUG', f"Verifying response for {state.current_tool_name}")
-
-            # Publish MCP event to stdout for Electron
-            publisher.publish_mcp_event(
-                direction='response',
-                message=message,
-                app_name=CONFIG['app_name'],
-                server_name=CONFIG['server_name'],
-                tool_name=state.current_tool_name
-            )
 
             verification_data = {
                 'message': message,
