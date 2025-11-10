@@ -134,27 +134,64 @@ async def handle_sse_bidirectional(
                                                         result = parsed.get('result', {})
                                                         method = parsed.get('method', '')
 
+                                                        # Determine response type and print formatted output
                                                         if result.get('tools'):
                                                             response_type = "tools/list"
+                                                            # Print tools in the same format as STDIO
+                                                            tools = result.get('tools', [])
+                                                            print(f"[SSE-Bidir] Discovered {len(tools)} tools")
+                                                            for i, tool in enumerate(tools):
+                                                                tool_name = tool.get('name', 'unknown')
+                                                                description = tool.get('description', '(no description)')
+                                                                print(f"  {i+1}. {tool_name} - {description}")
+                                                            print()
                                                         elif result.get('content'):
                                                             response_type = "tools/call"
+                                                            print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
+                                                            print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
+                                                            print()
                                                         elif result.get('prompts'):
                                                             response_type = "prompts/list"
+                                                            # Print prompts list
+                                                            prompts = result.get('prompts', [])
+                                                            print(f"[SSE-Bidir] Discovered {len(prompts)} prompts")
+                                                            for i, prompt in enumerate(prompts):
+                                                                prompt_name = prompt.get('name', 'unknown')
+                                                                description = prompt.get('description', '(no description)')
+                                                                print(f"  {i+1}. {prompt_name} - {description}")
+                                                            print()
                                                         elif result.get('messages'):
                                                             response_type = "prompts/get"
+                                                            print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
+                                                            print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
+                                                            print()
                                                         elif result.get('resources'):
                                                             response_type = "resources/list"
+                                                            # Print resources list
+                                                            resources = result.get('resources', [])
+                                                            print(f"[SSE-Bidir] Discovered {len(resources)} resources")
+                                                            for i, resource in enumerate(resources):
+                                                                resource_uri = resource.get('uri', 'unknown')
+                                                                name = resource.get('name', '')
+                                                                description = resource.get('description', '(no description)')
+                                                                display = f"{name} ({resource_uri})" if name else resource_uri
+                                                                print(f"  {i+1}. {display} - {description}")
+                                                            print()
                                                         elif 'initialize' in method or result.get('protocolVersion'):
                                                             response_type = "initialize"
+                                                            print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
+                                                            print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
+                                                            print()
                                                         elif parsed.get('error'):
                                                             response_type = "error"
+                                                            print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
+                                                            print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
+                                                            print()
                                                         else:
                                                             response_type = "Response"
-
-                                                        # Display response
-                                                        print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
-                                                        print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
-                                                        print()
+                                                            print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
+                                                            print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
+                                                            print()
                                                     except:
                                                         pass
 
