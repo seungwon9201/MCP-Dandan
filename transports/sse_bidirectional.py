@@ -59,6 +59,9 @@ async def handle_sse_bidirectional(
     # Track the target's message endpoint (received via endpoint event)
     target_message_endpoint = None
 
+    # Track pending tool calls for verification (maps message ID -> tool name)
+    pending_tool_calls = {}
+
     # Headers for SSE connection
     headers_to_send = {
         'Content-Type': 'application/json',
@@ -117,14 +120,8 @@ async def handle_sse_bidirectional(
                                     elif current_event or current_data_lines:
                                         # Forward other events as-is
                                         try:
-                                            # Build complete SSE event
-                                            event_parts = []
-                                            if current_event:
-                                                event_parts.append(f"event: {current_event}\n")
-
-                                            # Write data lines
+                                            # Parse and modify data lines BEFORE building event
                                             for idx, data_line in enumerate(current_data_lines):
-                                                event_parts.append(f"data: {data_line}\n")
                                                 # Parse and display JSON responses (first line only)
                                                 if idx == 0:
                                                     try:
@@ -187,6 +184,46 @@ async def handle_sse_bidirectional(
                                                             print()
                                                         elif result.get('content'):
                                                             response_type = "tools/call"
+
+                                                            # Check if this is a tool response we need to verify
+                                                            msg_id = parsed.get('id')
+                                                            if msg_id in pending_tool_calls:
+                                                                tool_name = pending_tool_calls[msg_id]
+
+                                                                server_info = {
+                                                                    'appName': connection.app_name,
+                                                                    'name': connection.server_name,
+                                                                    'version': 'unknown'
+                                                                }
+
+                                                                print(f"[Verify] Tool response: {tool_name} from {connection.app_name}/{connection.server_name}")
+
+                                                                # Verify the tool response
+                                                                verification = await verify_tool_response(
+                                                                    tool_name=tool_name,
+                                                                    response_data=parsed,
+                                                                    server_info=server_info
+                                                                )
+
+                                                                if not verification.allowed:
+                                                                    reason = verification.reason or 'Security policy violation'
+                                                                    print(f"[Verify] Response blocked: {reason}")
+                                                                    parsed = {
+                                                                        "jsonrpc": "2.0",
+                                                                        "id": parsed.get('id'),
+                                                                        "result": {
+                                                                            "content": [{
+                                                                                "type": "text",
+                                                                                "text": f"Response blocked: {reason}"
+                                                                            }]
+                                                                        }
+                                                                    }
+                                                                    data_line = json_lib.dumps(parsed)
+                                                                    current_data_lines[0] = data_line
+
+                                                                # Remove from pending
+                                                                del pending_tool_calls[msg_id]
+
                                                             print(f"\n[SSE-Bidir] {response_type} ({len(data_line)} chars)")
                                                             print(json_lib.dumps(parsed, indent=2, ensure_ascii=False))
                                                             print()
@@ -234,6 +271,15 @@ async def handle_sse_bidirectional(
                                                             print()
                                                     except:
                                                         pass
+
+                                            # Now build the SSE event with (possibly modified) data
+                                            event_parts = []
+                                            if current_event:
+                                                event_parts.append(f"event: {current_event}\n")
+
+                                            # Write data lines (using modified data from current_data_lines)
+                                            for data_line in current_data_lines:
+                                                event_parts.append(f"data: {data_line}\n")
 
                                             event_parts.append("\n")
                                             full_event = ''.join(event_parts)
@@ -333,6 +379,12 @@ async def handle_sse_bidirectional(
                                             'arguments': tool_args_clean
                                         }
                                     }
+
+                                # Track this tool call for response verification
+                                msg_id = message.get('id')
+                                if msg_id is not None:
+                                    pending_tool_calls[msg_id] = tool_name
+                                    print(f"[SSE-Bidir] Tracking tool call {tool_name} with ID {msg_id}")
 
                             # Wait for target_message_endpoint to be set (from endpoint event)
                             retry_count = 0
