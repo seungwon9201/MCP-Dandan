@@ -1,15 +1,18 @@
 services:
-  # 82ch-engine (Python 분석 엔진)
-  engine:
+  # 82ch - Unified MCP Security Framework
+  app:
     build: .
-    container_name: 82ch-engine
+    container_name: 82ch-server
     volumes:
-      - ./data:/app/data          # 데이터베이스 공유
+      - ./data:/app/data          # Database storage
       - ./schema.sql:/app/schema.sql
+      - ./.env:/app/.env          # Environment variables (optional)
     ports:
-      - "5555:5555"                # ZeroMQ Publisher
+      - "28173:28173"             # Observer HTTP server
     environment:
       - PYTHONUNBUFFERED=1
+      - MCP_PROXY_PORT=28173
+      - MCP_PROXY_HOST=0.0.0.0
     restart: unless-stopped
     networks:
       - 82ch-network
