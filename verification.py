@@ -1,12 +1,13 @@
 """
 Verification module for security scanning of tool calls and responses.
 
-This is a simplified version for demonstration. In production, this would
-integrate with your actual security scanning service.
+Integrates with EventHub to send events to detection engines.
 """
 
 from typing import Dict, Any, Optional
 import json
+import time
+from state import state
 
 
 class VerificationResult:
@@ -35,21 +36,45 @@ async def verify_tool_call(
     Returns:
         VerificationResult indicating if the call is allowed
     """
+    app_name = server_info.get('appName', 'unknown')
+    server_name = server_info.get('name', 'unknown')
+
     print(f"[Verification] Checking tool call: {tool_name}")
-    print(f"[Verification] Server: {server_info.get('appName')}/{server_info.get('serverName')}")
+    print(f"[Verification] Server: {app_name}/{server_name}")
 
     if user_intent:
         print(f"[Verification] User intent: {user_intent}")
 
-    # Simple demonstration - in production, integrate with actual security service
-    # For now, we'll allow all calls
-    # TODO: Implement actual verification logic:
-    # - Check against security signatures
-    # - Use LLM for semantic analysis
-    # - Check for sensitive data patterns
-    # - Validate against allowed tool lists
+    # Send event to EventHub for engine analysis
+    if state.event_hub:
+        event = {
+            'ts': int(time.time() * 1000),
+            'producer': 'local',  # STDIO
+            'pid': None,
+            'pname': app_name,
+            'eventType': 'MCP',
+            'mcpTag': server_name,
+            'data': {
+                'task': 'SEND',
+                'message': {
+                    'jsonrpc': '2.0',
+                    'method': 'tools/call',
+                    'params': {
+                        'name': tool_name,
+                        'arguments': {**tool_args, 'user_intent': user_intent} if user_intent else tool_args
+                    }
+                },
+                'mcpTag': server_name
+            }
+        }
 
-    # Example: Block dangerous file operations
+        # Process event asynchronously (don't wait)
+        try:
+            await state.event_hub.process_event(event)
+        except Exception as e:
+            print(f"[Verification] Error sending event to EventHub: {e}")
+
+    # Basic blocking checks
     dangerous_patterns = ["rm -rf", "/etc/", "format", "del /f"]
     args_str = json.dumps(tool_args).lower()
 
@@ -79,22 +104,39 @@ async def verify_tool_response(
     Returns:
         VerificationResult indicating if the response is allowed
     """
+    app_name = server_info.get('appName', 'unknown')
+    server_name = server_info.get('name', 'unknown')
+
     print(f"[Verification] Checking tool response: {tool_name}")
 
-    # Simple demonstration - in production, integrate with actual security service
-    # TODO: Implement actual verification logic:
-    # - Scan for sensitive data in responses
-    # - Check for malicious content
-    # - Validate response format
-    # - Check against data exfiltration patterns
+    # Send event to EventHub for engine analysis
+    if state.event_hub:
+        event = {
+            'ts': int(time.time() * 1000),
+            'producer': 'local',  # STDIO
+            'pid': None,
+            'pname': app_name,
+            'eventType': 'MCP',
+            'mcpTag': server_name,
+            'data': {
+                'task': 'RECV',
+                'message': response_data,
+                'mcpTag': server_name
+            }
+        }
 
-    # Example: Check for potential credential leaks
+        # Process event asynchronously
+        try:
+            await state.event_hub.process_event(event)
+        except Exception as e:
+            print(f"[Verification] Error sending event to EventHub: {e}")
+
+    # Basic warning checks
     response_str = json.dumps(response_data).lower()
     sensitive_patterns = ["password", "api_key", "secret", "token", "credential"]
 
     for pattern in sensitive_patterns:
         if pattern in response_str:
             print(f"[Verification] Warning: Response may contain sensitive data: {pattern}")
-            # In production, you might want to redact or block this
 
     return VerificationResult(allowed=True)

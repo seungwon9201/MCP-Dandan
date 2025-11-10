@@ -66,6 +66,9 @@ class GlobalState:
         # Lock for thread-safe operations
         self._lock = asyncio.Lock()
 
+        # EventHub instance (initialized on startup)
+        self.event_hub: Optional[Any] = None
+
     def get_call_key(self, request_id: Any, server_name: str, app_name: str) -> str:
         """Generate unique key for tracking tool calls."""
         return f"{app_name}:{server_name}:{request_id}"
