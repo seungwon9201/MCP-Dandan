@@ -1,0 +1,17 @@
+# 82ch Unified Configuration
+# Observer + Engine integrated mode
+
+[Engine]
+# Detection engines to enable
+sensitive_file_enabled = True
+tools_poisoning_enabled = True
+command_injection_enabled = True
+file_system_exposure_enabled = True
+
+[Log]
+# Log directory (currently not used, but reserved for future)
+log_dir = ./logs
+
+# Log file rotation settings
+max_log_file_size_mb = 100
+max_log_files = 5
