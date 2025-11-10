@@ -37,23 +37,35 @@ def setup_engines(db: Database) -> list:
 
     # Sensitive File Engine
     if config.get_sensitive_file_enabled():
-        engine = SensitiveFileEngine(db)
-        engines.append(engine)
+        try:
+            engine = SensitiveFileEngine(db)
+            engines.append(engine)
+        except Exception as e:
+            print(f"[Engine] Failed to initialize SensitiveFileEngine: {e}")
 
     # Tools Poisoning Engine (LLM-based)
     if config.get_tools_poisoning_enabled():
-        engine = ToolsPoisoningEngine(db, detail_mode=True)
-        engines.append(engine)
+        try:
+            engine = ToolsPoisoningEngine(db, detail_mode=True)
+            engines.append(engine)
+        except Exception as e:
+            print(f"[Engine] Failed to initialize ToolsPoisoningEngine: {e}")
 
     # Command Injection Engine
     if config.get_command_injection_enabled():
-        engine = CommandInjectionEngine(db)
-        engines.append(engine)
+        try:
+            engine = CommandInjectionEngine(db)
+            engines.append(engine)
+        except Exception as e:
+            print(f"[Engine] Failed to initialize CommandInjectionEngine: {e}")
 
     # File System Exposure Engine
     if config.get_file_system_exposure_enabled():
-        engine = FileSystemExposureEngine(db)
-        engines.append(engine)
+        try:
+            engine = FileSystemExposureEngine(db)
+            engines.append(engine)
+        except Exception as e:
+            print(f"[Engine] Failed to initialize FileSystemExposureEngine: {e}")
 
     return engines
 
@@ -142,11 +154,18 @@ async def on_startup(app):
     print("=" * 80)
 
     # Initialize engine system
-    db, event_hub = await initialize_engine_system()
-
-    # Store references for cleanup
-    app['db'] = db
-    app['event_hub'] = event_hub
+    try:
+        db, event_hub = await initialize_engine_system()
+        # Store references for cleanup
+        app['db'] = db
+        app['event_hub'] = event_hub
+    except Exception as e:
+        print(f"[Server] Warning: Failed to initialize engines: {e}")
+        print("[Server] Continuing in Observer-only mode...")
+        # Create minimal database without engines
+        db = Database()
+        await db.connect()
+        app['db'] = db
 
     print(f"\n[Observer] Starting HTTP server...")
     print(f"[Observer] Listening on http://{config.server_host}:{config.server_port}")
@@ -161,17 +180,27 @@ async def on_shutdown(app):
     """Called when the application shuts down."""
     state.running = False
 
-    print(f"\n[Server] Shutting down...")
+    print(f"[Server] Cleanup starting...")
 
     # Stop EventHub
     if state.event_hub:
-        await state.event_hub.stop()
+        try:
+            await asyncio.wait_for(state.event_hub.stop(), timeout=0.5)
+        except asyncio.TimeoutError:
+            print("[Server] EventHub timeout")
+        except Exception as e:
+            print(f"[Server] EventHub error: {e}")
 
     # Close database
     if 'db' in app:
-        await app['db'].close()
+        try:
+            await asyncio.wait_for(app['db'].close(), timeout=0.5)
+        except asyncio.TimeoutError:
+            print("[Server] Database timeout")
+        except Exception as e:
+            print(f"[Server] Database error: {e}")
 
-    print(f"[Server] All components stopped")
+    print(f"[Server] Cleanup done")
 
 
 def create_app():
@@ -193,21 +222,27 @@ def main():
     app = create_app()
 
     # Run the server
-    web.run_app(
-        app,
-        host=config.server_host,
-        port=config.server_port,
-        print=None  # Disable aiohttp's startup message
-    )
+    try:
+        web.run_app(
+            app,
+            host=config.server_host,
+            port=config.server_port,
+            print=None  # Disable aiohttp's startup message
+        )
+    except KeyboardInterrupt:
+        print("\n[Server] Interrupted")
+        os._exit(0)
 
 
 if __name__ == '__main__':
-    try:
-        # Windows asyncio event loop policy
-        if sys.platform == 'win32':
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    # Windows asyncio event loop policy
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+    try:
         main()
     except KeyboardInterrupt:
         print("\n[Server] Shutting down...")
-        sys.exit(0)
+        os._exit(0)
+    except SystemExit:
+        pass
