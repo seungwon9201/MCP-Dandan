@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "gmail-hbg780-45": {
-      "url": "https://mcp.composio.dev/partner/composio/gmail/mcp?customerId=eaee1d6c-c910-4dc6-a31a-29ac1ef6cb1c&agent=cursor"
+      "url": "https://mcp.composio.dev/partner/composio/gmail/mcp?customerId=input_ur_ID&agent=cursor"
     },
     "github": {
       "command": "python",
@@ -19,7 +19,7 @@
       }
     },
     "coingecko-mcp": {
-      "url": "https://mcp.api.coingecko.com/sse"
+      "url": "http://127.0.0.1:28173/cursor/coingecko-mcp/sse?target=https://mcp.api.coingecko.com/sse"
     }
   }
 }
