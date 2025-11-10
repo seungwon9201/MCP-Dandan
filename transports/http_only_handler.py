@@ -6,6 +6,7 @@ Handles POST requests directly without SSE connection (like Context7).
 
 import aiohttp
 import json
+from verification import verify_tool_call, verify_tool_response
 
 
 async def handle_http_only_message(request):
@@ -44,6 +45,63 @@ async def handle_http_only_message(request):
 
     print(f"[HTTP-Only] {msg_type}: method={message.get('method')}, id={message.get('id', 'N/A')}")
     print(f"[HTTP-Only] Payload: {json.dumps(message, indent=2)}")
+
+    # Check for tool calls and verify
+    if message.get('method') == 'tools/call':
+        params = message.get('params', {})
+        tool_name = params.get('name', 'unknown')
+        tool_args = params.get('arguments', {})
+
+        # Extract user_intent
+        user_intent = tool_args.get('user_intent', '')
+        tool_args_clean = {k: v for k, v in tool_args.items() if k != 'user_intent'}
+
+        server_info = {
+            'appName': app_name,
+            'name': server_name,
+            'version': 'unknown'
+        }
+
+        print(f"[Verify] Tool call: {tool_name} from {app_name}/{server_name}")
+        if user_intent:
+            print(f"[Verify] User intent: {user_intent}")
+
+        # Verify the tool call
+        verification = await verify_tool_call(
+            tool_name=tool_name,
+            tool_args=tool_args_clean,
+            server_info=server_info,
+            user_intent=user_intent
+        )
+
+        if not verification.allowed:
+            reason = verification.reason or 'Security policy violation'
+            print(f"[Verify] Tool call blocked: {reason}")
+            return aiohttp.web.Response(
+                status=200,
+                text=json.dumps({
+                    "jsonrpc": "2.0",
+                    "id": message.get('id'),
+                    "result": {
+                        "content": [{
+                            "type": "text",
+                            "text": f"Tool call blocked: {reason}"
+                        }]
+                    }
+                }),
+                content_type='application/json'
+            )
+
+        # Strip user_intent before forwarding to target
+        if 'user_intent' in tool_args:
+            print(f"[HTTP-Only] Stripping user_intent before forwarding")
+            message = {
+                **message,
+                'params': {
+                    **params,
+                    'arguments': tool_args_clean
+                }
+            }
 
     # Get target URL and headers from query/headers
     import os
@@ -128,6 +186,40 @@ async def handle_http_only_message(request):
                 # Get response data
                 response_data = await response.json()
 
+                # Verify tool response if this was a tool call
+                if message.get('method') == 'tools/call' and response_data.get('result'):
+                    params = message.get('params', {})
+                    tool_name = params.get('name', 'unknown')
+
+                    server_info = {
+                        'appName': app_name,
+                        'name': server_name,
+                        'version': 'unknown'
+                    }
+
+                    print(f"[Verify] Tool response: {tool_name} from {app_name}/{server_name}")
+
+                    # Verify the tool response
+                    verification = await verify_tool_response(
+                        tool_name=tool_name,
+                        response_data=response_data,
+                        server_info=server_info
+                    )
+
+                    if not verification.allowed:
+                        reason = verification.reason or 'Security policy violation'
+                        print(f"[Verify] Response blocked: {reason}")
+                        response_data = {
+                            "jsonrpc": "2.0",
+                            "id": response_data.get('id'),
+                            "result": {
+                                "content": [{
+                                    "type": "text",
+                                    "text": f"Response blocked: {reason}"
+                                }]
+                            }
+                        }
+
                 # Determine response type
                 result = response_data.get('result', {})
                 method = message.get('method', '')
@@ -135,13 +227,48 @@ async def handle_http_only_message(request):
                 # Determine response type and print formatted output
                 if result.get('tools'):
                     response_type = "tools/list"
-                    # Print tools in the same format as STDIO
                     tools = result.get('tools', [])
                     print(f"[HTTP-Only] Discovered {len(tools)} tools")
+
+                    # Modify tools to add user_intent parameter (like STDIO)
+                    modified_tools = []
                     for i, tool in enumerate(tools):
                         tool_name = tool.get('name', 'unknown')
                         description = tool.get('description', '(no description)')
                         print(f"  {i+1}. {tool_name} - {description}")
+
+                        modified_tool = tool.copy()
+
+                        # Ensure inputSchema exists
+                        if 'inputSchema' not in modified_tool:
+                            modified_tool['inputSchema'] = {
+                                'type': 'object',
+                                'properties': {},
+                                'required': []
+                            }
+
+                        # Add user_intent to properties
+                        if 'properties' not in modified_tool['inputSchema']:
+                            modified_tool['inputSchema']['properties'] = {}
+
+                        modified_tool['inputSchema']['properties']['user_intent'] = {
+                            'type': 'string',
+                            'description': 'Explain the reasoning and context for why you are calling this tool.'
+                        }
+
+                        # Add to required fields
+                        required = modified_tool['inputSchema'].get('required', [])
+                        if 'user_intent' not in required:
+                            modified_tool['inputSchema']['required'] = required + ['user_intent']
+
+                        # Add security prefix to description
+                        if modified_tool.get('description'):
+                            modified_tool['description'] = f"🔒{modified_tool['description']}"
+
+                        modified_tools.append(modified_tool)
+
+                    # Replace tools in response
+                    response_data['result']['tools'] = modified_tools
                     print()  # Empty line after tool list
                 elif result.get('content'):
                     response_type = "tools/call"

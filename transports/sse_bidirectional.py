@@ -8,6 +8,7 @@ not HTTP POST /message endpoint.
 import aiohttp
 import asyncio
 import json
+from verification import verify_tool_call, verify_tool_response
 
 
 async def write_chunked(response, data: str, chunk_size: int = 4000):
@@ -238,6 +239,62 @@ async def handle_sse_bidirectional(
 
                             print(f"[SSE-Bidir] Client -> Target: {message.get('method', 'response')}")
 
+                            # Check for tool calls and verify
+                            if message.get('method') == 'tools/call':
+                                params = message.get('params', {})
+                                tool_name = params.get('name', 'unknown')
+                                tool_args = params.get('arguments', {})
+
+                                # Extract user_intent
+                                user_intent = tool_args.get('user_intent', '')
+                                tool_args_clean = {k: v for k, v in tool_args.items() if k != 'user_intent'}
+
+                                server_info = {
+                                    'appName': connection.app_name,
+                                    'name': connection.server_name,
+                                    'version': 'unknown'
+                                }
+
+                                print(f"[Verify] Tool call: {tool_name} from {connection.app_name}/{connection.server_name}")
+                                if user_intent:
+                                    print(f"[Verify] User intent: {user_intent}")
+
+                                # Verify the tool call
+                                verification = await verify_tool_call(
+                                    tool_name=tool_name,
+                                    tool_args=tool_args_clean,
+                                    server_info=server_info,
+                                    user_intent=user_intent
+                                )
+
+                                if not verification.allowed:
+                                    reason = verification.reason or 'Security policy violation'
+                                    print(f"[Verify] Tool call blocked: {reason}")
+                                    error_response = {
+                                        "jsonrpc": "2.0",
+                                        "id": message.get('id'),
+                                        "result": {
+                                            "content": [{
+                                                "type": "text",
+                                                "text": f"Tool call blocked: {reason}"
+                                            }]
+                                        }
+                                    }
+                                    event = f"event: message\ndata: {json.dumps(error_response)}\n\n"
+                                    await write_chunked(client_response, event)
+                                    continue
+
+                                # Strip user_intent before forwarding to target
+                                if 'user_intent' in tool_args:
+                                    print(f"[SSE-Bidir] Stripping user_intent before forwarding")
+                                    message = {
+                                        **message,
+                                        'params': {
+                                            **params,
+                                            'arguments': tool_args_clean
+                                        }
+                                    }
+
                             # Wait for target_message_endpoint to be set (from endpoint event)
                             retry_count = 0
                             while target_message_endpoint is None and retry_count < 50:
@@ -284,6 +341,40 @@ async def handle_sse_bidirectional(
                                         # Some servers return 200 with response body
                                         response_data = await msg_response.json()
                                         print(f"[SSE-Bidir] Got response from target via POST (200)")
+
+                                        # Verify tool response if this was a tool call
+                                        if message.get('method') == 'tools/call' and response_data.get('result'):
+                                            params = message.get('params', {})
+                                            tool_name = params.get('name', 'unknown')
+
+                                            server_info = {
+                                                'appName': connection.app_name,
+                                                'name': connection.server_name,
+                                                'version': 'unknown'
+                                            }
+
+                                            print(f"[Verify] Tool response: {tool_name} from {connection.app_name}/{connection.server_name}")
+
+                                            # Verify the tool response
+                                            verification = await verify_tool_response(
+                                                tool_name=tool_name,
+                                                response_data=response_data,
+                                                server_info=server_info
+                                            )
+
+                                            if not verification.allowed:
+                                                reason = verification.reason or 'Security policy violation'
+                                                print(f"[Verify] Response blocked: {reason}")
+                                                response_data = {
+                                                    "jsonrpc": "2.0",
+                                                    "id": response_data.get('id'),
+                                                    "result": {
+                                                        "content": [{
+                                                            "type": "text",
+                                                            "text": f"Response blocked: {reason}"
+                                                        }]
+                                                    }
+                                                }
 
                                         # Send response back to client via SSE
                                         event = f"event: message\ndata: {json.dumps(response_data)}\n\n"
