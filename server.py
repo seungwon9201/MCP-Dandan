@@ -178,6 +178,29 @@ async def on_shutdown(app):
 
     print(f"[Server] Cleanup starting...")
 
+    # Close all SSE connections gracefully
+    if state.sse_connections:
+        print(f"[Server] Closing {len(state.sse_connections)} SSE connections...")
+        connections_to_close = list(state.sse_connections.values())
+        for conn in connections_to_close:
+            try:
+                # Send a close event to client if possible
+                if conn.client_response and not conn.client_response._eof_sent:
+                    try:
+                        await conn.client_response.write_eof()
+                    except:
+                        pass
+
+                # Close target session if exists
+                if conn.target_session and not conn.target_session.closed:
+                    await conn.target_session.close()
+            except Exception as e:
+                print(f"[Server] Error closing SSE connection {conn.connection_id}: {e}")
+
+        # Clear all connections
+        state.sse_connections.clear()
+        print(f"[Server] All SSE connections closed")
+
     # Stop EventHub
     if state.event_hub:
         try:
@@ -231,10 +254,53 @@ async def start_server():
     except (KeyboardInterrupt, asyncio.CancelledError):
         print("\n[Server] Interrupted")
     finally:
-        await runner.cleanup()
-        await app.shutdown()
-        await app.cleanup()
+        # Trigger shutdown callbacks to clean up SSE connections, etc.
+        try:
+            await asyncio.wait_for(app.shutdown(), timeout=2.0)
+        except asyncio.TimeoutError:
+            print("[Server] App shutdown timeout")
+        except Exception as e:
+            print(f"[Server] App shutdown error: {e}")
+
+        # Stop the site first to prevent new connections
+        try:
+            await site.stop()
+        except Exception as e:
+            print(f"[Server] Site stop error: {e}")
+
+        # Cancel all remaining tasks
+        try:
+            tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+            if tasks:
+                print(f"[Server] Cancelling {len(tasks)} remaining tasks...")
+                for task in tasks:
+                    task.cancel()
+
+                # Wait for tasks to complete cancellation with suppressed exceptions
+                await asyncio.gather(*tasks, return_exceptions=True)
+        except Exception as e:
+            print(f"[Server] Task cancellation error: {e}")
+
+        # Final cleanup
+        try:
+            await asyncio.wait_for(runner.cleanup(), timeout=1.0)
+        except asyncio.TimeoutError:
+            print("[Server] Runner cleanup timeout")
+        except Exception as e:
+            print(f"[Server] Runner cleanup error: {e}")
+
+        try:
+            await asyncio.wait_for(app.cleanup(), timeout=1.0)
+        except asyncio.TimeoutError:
+            print("[Server] App cleanup timeout")
+        except Exception as e:
+            print(f"[Server] App cleanup error: {e}")
+
         print("[Server] Server stopped")
 
 if __name__ == '__main__':
-    asyncio.run(start_server())
+    try:
+        asyncio.run(start_server())
+    except KeyboardInterrupt:
+        # Clean exit, already handled in start_server()
+        pass
