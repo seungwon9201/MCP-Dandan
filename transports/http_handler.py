@@ -158,6 +158,16 @@ async def handle_http_only_message(request):
                 json=message,
                 headers=headers_to_send
             ) as response:
+                # Handle 202 Accepted (no body) - typically for notifications
+                if response.status == 202:
+                    print(f"[HTTP-Only] Target accepted request (202)")
+                    return aiohttp.web.Response(
+                        status=202,
+                        text="",
+                        content_type='application/json'
+                    )
+
+                # Handle other non-200 status codes
                 if response.status != 200:
                     error_text = await response.text()
                     print(f"[HTTP-Only] Target returned HTTP {response.status}")
@@ -166,14 +176,6 @@ async def handle_http_only_message(request):
                     return aiohttp.web.Response(
                         status=response.status,
                         text=error_text,
-                        content_type='application/json'
-                    )
-
-                # Handle 202 Accepted (no body)
-                if response.status == 202:
-                    return aiohttp.web.Response(
-                        status=202,
-                        text="",
                         content_type='application/json'
                     )
 
