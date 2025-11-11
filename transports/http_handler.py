@@ -6,7 +6,9 @@ Handles POST requests directly without SSE connection (like Context7).
 
 import aiohttp
 import json
+import time
 from verification import verify_tool_call, verify_tool_response
+from state import state
 
 
 async def handle_http_only_message(request):
@@ -46,6 +48,23 @@ async def handle_http_only_message(request):
     print(f"[HTTP-Only] {msg_type}: method={message.get('method')}, id={message.get('id', 'N/A')}")
     print(f"[HTTP-Only] Payload: {json.dumps(message, indent=2)}")
 
+    # Log all requests to EventHub
+    if state.event_hub:
+        event = {
+            'ts': int(time.time() * 1000),
+            'producer': 'remote',
+            'pid': None,
+            'pname': app_name,
+            'eventType': 'MCP',
+            'mcpTag': server_name,
+            'data': {
+                'task': 'SEND',
+                'message': message,
+                'mcpTag': server_name
+            }
+        }
+        await state.event_hub.process_event(event)
+
     # Check for tool calls and verify
     if message.get('method') == 'tools/call':
         params = message.get('params', {})
@@ -66,12 +85,13 @@ async def handle_http_only_message(request):
         if user_intent:
             print(f"[Verify] User intent: {user_intent}")
 
-        # Verify the tool call
+        # Verify the tool call (skip logging since we already logged above)
         verification = await verify_tool_call(
             tool_name=tool_name,
             tool_args=tool_args_clean,
             server_info=server_info,
-            user_intent=user_intent
+            user_intent=user_intent,
+            skip_logging=True
         )
 
         if not verification.allowed:
@@ -215,6 +235,23 @@ async def handle_http_only_message(request):
                 else:
                     response_data = await response.json()
 
+                # Log all responses to EventHub
+                if state.event_hub:
+                    event = {
+                        'ts': int(time.time() * 1000),
+                        'producer': 'remote',
+                        'pid': None,
+                        'pname': app_name,
+                        'eventType': 'MCP',
+                        'mcpTag': server_name,
+                        'data': {
+                            'task': 'RECV',
+                            'message': response_data,
+                            'mcpTag': server_name
+                        }
+                    }
+                    await state.event_hub.process_event(event)
+
                 # Verify tool response if this was a tool call
                 if message.get('method') == 'tools/call' and response_data.get('result'):
                     params = message.get('params', {})
@@ -228,11 +265,29 @@ async def handle_http_only_message(request):
 
                     print(f"[Verify] Tool response: {tool_name} from {app_name}/{server_name}")
 
-                    # Verify the tool response
+                    # Log response to EventHub
+                    if state.event_hub:
+                        event = {
+                            'ts': int(time.time() * 1000),
+                            'producer': 'remote',
+                            'pid': None,
+                            'pname': app_name,
+                            'eventType': 'MCP',
+                            'mcpTag': server_name,
+                            'data': {
+                                'task': 'RECV',
+                                'message': response_data,
+                                'mcpTag': server_name
+                            }
+                        }
+                        await state.event_hub.process_event(event)
+
+                    # Verify the tool response (skip logging since we already logged above)
                     verification = await verify_tool_response(
                         tool_name=tool_name,
                         response_data=response_data,
-                        server_info=server_info
+                        server_info=server_info,
+                        skip_logging=True
                     )
 
                     if not verification.allowed:
