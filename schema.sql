@@ -85,17 +85,7 @@ CREATE TABLE IF NOT EXISTS engine_results (
 CREATE INDEX IF NOT EXISTS idx_engine_name ON engine_results(engine_name);
 CREATE INDEX IF NOT EXISTS idx_serverName ON engine_results(serverName);
 
--- 6. 시스템 메타데이터
-CREATE TABLE IF NOT EXISTS system_metadata (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
-INSERT OR IGNORE INTO system_metadata (key, value) VALUES ('db_version', '1.0');
-INSERT OR IGNORE INTO system_metadata (key, value) VALUES ('created_at', datetime('now'));
-
--- -- 7. MCPL(tools/call)
+-- 6. MCPL(tools/call)
 Create table if not exists mcpl (
     mcpTag TEXT NOT NULL    ,  -- mcpTag
     producer TEXT NOT NULL  ,  -- producer
