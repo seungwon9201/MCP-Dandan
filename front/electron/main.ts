@@ -77,9 +77,21 @@ let db: BetterSqlite3.Database | null = null
 function initializeDatabase() {
   try {
     // Use DB_PATH from environment variable or default path
-    const dbPath = process.env.DB_PATH || 'C:\\82ch\\82ch\\data\\mcp_observer.db'
+    // In development: front/../data/mcp_observer.db
+    // In production: can be set via DB_PATH env var
+    let dbPath: string
+    if (process.env.DB_PATH) {
+      dbPath = process.env.DB_PATH
+    } else {
+      // Default: go up one directory from electron folder to project root
+      const projectRoot = path.join(__dirname, '..', '..')
+      dbPath = path.join(projectRoot, 'data', 'mcp_observer.db')
+    }
+
     console.log(`[DB] Initializing database...`)
     console.log(`[DB] Database path: ${dbPath}`)
+    console.log(`[DB] __dirname: ${__dirname}`)
+    console.log(`[DB] app.getAppPath(): ${app.getAppPath()}`)
 
     db = new Database(dbPath, {
       readonly: true,
