@@ -97,11 +97,6 @@ class EventHub:
                         if count and count > 0:
                             print(f'[EventHub] Extracted {count} tool(s) to mcpl table')
 
-                elif event_type.lower() in ['file', 'fileio']:
-                    await self.db.insert_file_event(event, raw_event_id)
-                elif event_type.lower() == 'process':
-                    await self.db.insert_process_event(event, raw_event_id)
-
         except Exception as e:
             print(f'[EventHub] Error saving event: {e}')
 

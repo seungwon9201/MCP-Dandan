@@ -164,72 +164,6 @@ class Database:
             print(f'rpc_event 저장 실패: {e}')
             return None
 
-    # 파일 이벤트 저장
-    async def insert_file_event(self, event: Dict[str, Any], raw_event_id: int = None) -> Optional[int]:
-
-        try:
-            data = event.get('data', {})
-            ts_millis = event.get('ts', 0)
-            # 밀리초 타임스탬프를 DATETIME으로 변환
-            ts = datetime.fromtimestamp(ts_millis / 1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] if ts_millis else None
-
-            pid = event.get('pid')
-            pname = event.get('pname')
-            operation = data.get('operation', 'Unknown')
-            file_path = data.get('filePath') or data.get('path')
-            old_path = data.get('oldPath')
-            new_path = data.get('newPath')
-            size = data.get('size')
-
-            cursor = await self.conn.execute(
-                """
-                INSERT INTO file_events
-                (raw_event_id, ts, pid, pname, operation, file_path, old_path, new_path, size)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (raw_event_id, ts, pid, pname, operation, file_path, old_path, new_path, size)
-            )
-
-            await self.conn.commit()
-            return cursor.lastrowid
-
-        except Exception as e:
-            print(f'file_event 저장 실패: {e}')
-            return None
-
-
-    # 프로세스 이벤트 저장
-    async def insert_process_event(self, event: Dict[str, Any], raw_event_id: int = None) -> Optional[int]:
-
-        try:
-            data = event.get('data', {})
-            ts_millis = event.get('ts', 0)
-            # 밀리초 타임스탬프를 DATETIME으로 변환
-            ts = datetime.fromtimestamp(ts_millis / 1000).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3] if ts_millis else None
-
-            pid = event.get('pid') or data.get('pid')
-            pname = event.get('pname') or data.get('processName')
-            parent_pid = data.get('parentPid')
-            command_line = data.get('commandLine')
-            operation = data.get('operation', 'Unknown')
-            exit_code = data.get('exitCode')
-
-            cursor = await self.conn.execute(
-                """
-                INSERT INTO process_events
-                (raw_event_id, ts, pid, pname, parent_pid, command_line, operation, exit_code)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (raw_event_id, ts, pid, pname, parent_pid, command_line, operation, exit_code)
-            )
-
-            await self.conn.commit()
-            return cursor.lastrowid
-
-        except Exception as e:
-            print(f'process_event 저장 실패: {e}')
-            return None
-
     # 엔진 결과 저장
     async def insert_engine_result(self, result: Dict[str, Any], raw_event_id: int = None, server_name: str = None, producer: str = None) -> Optional[int]:
 
@@ -346,8 +280,7 @@ class Database:
         """
         try:
             # SQL Injection 방지 (none accept 발생시 allowed table에 추가)
-            allowed_tables = ['raw_events', 'rpc_events', 'file_events', 'process_events',
-                            'engine_results','mcpl']
+            allowed_tables = ['raw_events', 'rpc_events', 'engine_results', 'mcpl']
             if table_name not in allowed_tables:
                 print(f'none accept table name or type : {table_name}')
                 return True
