@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
+import { execSync } from 'child_process'
 import type BetterSqlite3 from 'better-sqlite3'
 
 const require = createRequire(import.meta.url)
@@ -14,6 +15,27 @@ const __dirname = path.dirname(__filename)
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
 let mainWindow: BrowserWindow | null = null
+
+// Kill backend server function
+function killBackendServer() {
+  try {
+    console.log('[Electron] Killing backend server on port 28173...')
+    if (process.platform === 'win32') {
+      // Windows
+      execSync('FOR /F "tokens=5" %P IN (\'netstat -ano ^| findstr :28173 ^| findstr LISTENING\') DO taskkill /PID %P /F', {
+        shell: 'cmd.exe',
+        stdio: 'ignore'
+      })
+    } else {
+      // macOS/Linux
+      execSync('lsof -ti:28173 | xargs kill -9', { stdio: 'ignore' })
+    }
+    console.log('[Electron] Backend server killed successfully')
+  } catch (error) {
+    // Server might not be running, ignore error
+    console.log('[Electron] No backend server to kill or already stopped')
+  }
+}
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -69,6 +91,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// 앱이 완전히 종료될 때 - 백엔드 서버도 종료
+app.on('will-quit', () => {
+  killBackendServer()
 })
 
 // Database setup
