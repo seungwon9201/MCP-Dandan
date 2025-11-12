@@ -1,4 +1,10 @@
-function MiddleBottomPanel({ selectedMessage }) {
+import type { ChatMessage } from '../types'
+
+interface MiddleBottomPanelProps {
+  selectedMessage: ChatMessage | null
+}
+
+function MiddleBottomPanel({ selectedMessage }: MiddleBottomPanelProps) {
   if (!selectedMessage) {
     return (
       <div className="h-full bg-white flex items-center justify-center text-gray-500">

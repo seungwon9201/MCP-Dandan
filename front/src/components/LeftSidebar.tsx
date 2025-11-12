@@ -1,8 +1,17 @@
 import { ChevronLeft, ChevronRight, MessageSquare, Settings, LayoutDashboard, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
+import type { MCPServer } from '../types'
 
-function LeftSidebar({ isOpen, setIsOpen, servers, selectedServer, setSelectedServer }) {
-  const [isServersExpanded, setIsServersExpanded] = useState(true)
+interface LeftSidebarProps {
+  isOpen: boolean
+  setIsOpen: (isOpen: boolean) => void
+  servers: MCPServer[]
+  selectedServer: MCPServer | null
+  setSelectedServer: (server: MCPServer | null) => void
+}
+
+function LeftSidebar({ isOpen, setIsOpen, servers, selectedServer, setSelectedServer }: LeftSidebarProps) {
+  const [isServersExpanded, setIsServersExpanded] = useState<boolean>(true)
 
   return (
     <>

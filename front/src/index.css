@@ -10,4 +10,12 @@ body {
 #root {
   height: 100vh;
   width: 100vw;
+  min-width: 800px;
+}
+
+/* Responsive text sizing */
+@media (max-width: 1200px) {
+  html {
+    font-size: 14px;
+  }
 }

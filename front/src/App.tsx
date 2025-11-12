@@ -4,22 +4,23 @@ import MiddleTopPanel from './components/MiddleTopPanel'
 import MiddleBottomPanel from './components/MiddleBottomPanel'
 import RightChatPanel from './components/RightChatPanel'
 import Dashboard from './components/Dashboard'
+import type { MCPServer, ChatMessage } from './types'
 
 const API_BASE_URL = 'http://localhost:3001/api'
 
 function App() {
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true)
-  const [selectedServer, setSelectedServer] = useState(null)
-  const [selectedMessage, setSelectedMessage] = useState(null)
+  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(true)
+  const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null)
+  const [selectedMessage, setSelectedMessage] = useState<ChatMessage | null>(null)
 
   // Data from backend
-  const [mcpServers, setMcpServers] = useState([])
-  const [chatMessages, setChatMessages] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
 
   // Resizable states
   const [middleTopHeight, setMiddleTopHeight] = useState(50) // percentage
-  const [rightPanelWidth, setRightPanelWidth] = useState(33) // percentage
+  const [rightPanelWidth, setRightPanelWidth] = useState(400) // pixels instead of percentage
 
   const isDraggingVertical = useRef(false)
   const isDraggingHorizontal = useRef(false)
@@ -40,9 +41,15 @@ function App() {
 
   const fetchServers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/servers`)
-      const data = await response.json()
-      setMcpServers(data)
+      // Use Electron IPC if available, otherwise fall back to HTTP API
+      if (window.electronAPI) {
+        const data = await window.electronAPI.getServers()
+        setMcpServers(data)
+      } else {
+        const response = await fetch(`${API_BASE_URL}/servers`)
+        const data = await response.json()
+        setMcpServers(data)
+      }
       setLoading(false)
     } catch (error) {
       console.error('Error fetching servers:', error)
@@ -50,11 +57,17 @@ function App() {
     }
   }
 
-  const fetchMessages = async (serverId) => {
+  const fetchMessages = async (serverId: string | number) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/servers/${serverId}/messages`)
-      const data = await response.json()
-      setChatMessages(data)
+      // Use Electron IPC if available, otherwise fall back to HTTP API
+      if (window.electronAPI) {
+        const data = await window.electronAPI.getServerMessages(Number(serverId))
+        setChatMessages(data)
+      } else {
+        const response = await fetch(`${API_BASE_URL}/servers/${serverId}/messages`)
+        const data = await response.json()
+        setChatMessages(data)
+      }
     } catch (error) {
       console.error('Error fetching messages:', error)
       setChatMessages([])
@@ -72,7 +85,7 @@ function App() {
     isDraggingVertical.current = true
   }
 
-  const handleVerticalMouseMove = (e) => {
+  const handleVerticalMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDraggingVertical.current) return
 
     const container = e.currentTarget
@@ -93,13 +106,17 @@ function App() {
     isDraggingHorizontal.current = true
   }
 
-  const handleHorizontalMouseMove = (e) => {
+  const handleHorizontalMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isDraggingHorizontal.current) return
 
     const windowWidth = window.innerWidth
-    const newWidth = ((windowWidth - e.clientX) / windowWidth) * 100
+    const newWidth = windowWidth - e.clientX
 
-    if (newWidth > 20 && newWidth < 60) {
+    // Min 300px, max 60% of window width
+    const minWidth = 300
+    const maxWidth = windowWidth * 0.6
+
+    if (newWidth >= minWidth && newWidth <= maxWidth) {
       setRightPanelWidth(newWidth)
     }
   }
@@ -144,14 +161,14 @@ function App() {
         <>
           {/* Middle Section */}
           <div
-            className="flex-1 flex flex-col"
-            style={{ width: `${100 - rightPanelWidth}%` }}
+            className="flex-1 flex flex-col min-w-0"
+            style={{ width: `calc(100% - ${rightPanelWidth}px)` }}
             onMouseMove={handleVerticalMouseMove}
             onMouseUp={handleVerticalMouseUp}
           >
             {/* Middle Top Panel */}
             <div
-              className="border-b border-gray-300 relative"
+              className="border-b border-gray-300 relative min-h-0"
               style={{ height: `${middleTopHeight}%` }}
             >
               <MiddleTopPanel serverInfo={serverInfo} />
@@ -164,21 +181,21 @@ function App() {
             </div>
 
             {/* Middle Bottom Panel */}
-            <div style={{ height: `${100 - middleTopHeight}%` }}>
+            <div className="min-h-0" style={{ height: `${100 - middleTopHeight}%` }}>
               <MiddleBottomPanel selectedMessage={selectedMessage} />
             </div>
           </div>
 
           {/* Horizontal Resize Handle */}
           <div
-            className="w-1 bg-gray-300 hover:bg-blue-400 cursor-ew-resize transition-colors"
+            className="w-1 bg-gray-300 hover:bg-blue-400 cursor-ew-resize transition-colors flex-shrink-0"
             onMouseDown={handleHorizontalMouseDown}
           />
 
           {/* Right Chat Panel */}
           <div
-            className="border-l border-gray-300"
-            style={{ width: `${rightPanelWidth}%` }}
+            className="border-l border-gray-300 flex-shrink-0"
+            style={{ width: `${rightPanelWidth}px`, minWidth: '300px', maxWidth: '60vw' }}
           >
             <RightChatPanel
               messages={chatMessages}

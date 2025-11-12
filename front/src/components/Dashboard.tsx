@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Shield, FileWarning, Database } from 'lucide-react'
+import { AlertTriangle, Shield, FileWarning, Database, LucideIcon } from 'lucide-react'
+import type { MCPServer, DetectedEvent, ThreatStats, TimelineData, TopServer } from '../types'
 
 const API_BASE_URL = 'http://localhost:3001/api'
 
-const threatDefinitions = [
+interface ThreatDefinition {
+  name: string
+  description: string
+  icon: LucideIcon
+  color: string
+  bgColor: string
+  borderColor: string
+}
+
+const threatDefinitions: ThreatDefinition[] = [
   {
     name: 'Tool Poisoning',
     description: 'Malicious or tampered MCP tools are loaded, compromising normal operations.',
@@ -38,11 +48,16 @@ const threatDefinitions = [
   }
 ]
 
-function Dashboard({ setSelectedServer, servers }) {
-  const [detectedEvents, setDetectedEvents] = useState([])
-  const [topServers, setTopServers] = useState([])
-  const [threatStats, setThreatStats] = useState({})
-  const [timelineData, setTimelineData] = useState([])
+interface DashboardProps {
+  setSelectedServer: (server: MCPServer | null) => void
+  servers: MCPServer[]
+}
+
+function Dashboard({ setSelectedServer, servers }: DashboardProps) {
+  const [detectedEvents, setDetectedEvents] = useState<DetectedEvent[]>([])
+  const [topServers, setTopServers] = useState<TopServer[]>([])
+  const [threatStats, setThreatStats] = useState<Record<string, ThreatStats>>({})
+  const [timelineData, setTimelineData] = useState<TimelineData[]>([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -50,16 +65,22 @@ function Dashboard({ setSelectedServer, servers }) {
 
   const fetchDashboardData = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/engine-results`)
-      const engineResults = await response.json()
+      // Use Electron IPC if available, otherwise fall back to HTTP API
+      let engineResults
+      if (window.electronAPI) {
+        engineResults = await window.electronAPI.getEngineResults()
+      } else {
+        const response = await fetch(`${API_BASE_URL}/engine-results`)
+        engineResults = await response.json()
+      }
 
       // Process data for dashboard
-      const events = []
-      const serverDetectionCount = {}
-      const threatCount = {}
-      const threatAffectedServers = {}
+      const events: DetectedEvent[] = []
+      const serverDetectionCount: Record<string, number> = {}
+      const threatCount: Record<string, number> = {}
+      const threatAffectedServers: Record<string, Set<string>> = {}
 
-      engineResults.forEach(result => {
+      engineResults.forEach((result: any) => {
         const serverName = result.serverName || 'Unknown'
 
         // Count detections per server
@@ -91,7 +112,7 @@ function Dashboard({ setSelectedServer, servers }) {
         }
 
         // Determine severity based on severity field or score
-        let severity = result.severity || 'low'
+        let severity: 'low' | 'mid' | 'high' = result.severity || 'low'
         let severityColor = 'bg-yellow-400'
 
         if (severity.toLowerCase() === 'high' || result.score >= 8) {
@@ -141,12 +162,12 @@ function Dashboard({ setSelectedServer, servers }) {
 
       // Sort servers by detection count
       const sortedServers = Object.entries(serverDetectionCount)
-        .sort(([, a], [, b]) => b - a)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
         .slice(0, 5)
-        .map(([name, count]) => ({ name, count }))
+        .map(([name, count]) => ({ name, count: count as number }))
 
       // Build threat stats
-      const stats = {}
+      const stats: Record<string, ThreatStats> = {}
       threatDefinitions.forEach(threat => {
         stats[threat.name] = {
           detections: threatCount[threat.name] || 0,
@@ -155,8 +176,8 @@ function Dashboard({ setSelectedServer, servers }) {
       })
 
       // Process timeline data (group by date)
-      const timelineMap = {}
-      engineResults.forEach(result => {
+      const timelineMap: Record<string, number> = {}
+      engineResults.forEach((result: any) => {
         // Extract date from timestamp (e.g., "2025-11-07 04:01:18" -> "2025-11-07")
         let date
         if (result.created_at) {
@@ -174,7 +195,7 @@ function Dashboard({ setSelectedServer, servers }) {
       // Convert to array and sort by date
       const timeline = Object.entries(timelineMap)
         .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-        .map(([date, count]) => ({ date, count }))
+        .map(([date, count]) => ({ date, count: count as number }))
 
       setTopServers(sortedServers)
       setDetectedEvents(events)
@@ -185,7 +206,7 @@ function Dashboard({ setSelectedServer, servers }) {
     }
   }
 
-  const handleGoToServer = (serverName) => {
+  const handleGoToServer = (serverName: string) => {
     const server = servers.find(s => s.name === serverName)
     if (server) {
       setSelectedServer(server)
@@ -401,7 +422,7 @@ function Dashboard({ setSelectedServer, servers }) {
               ))}
               {detectedEvents.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                     No security events detected
                   </td>
                 </tr>

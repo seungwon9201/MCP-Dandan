@@ -1,6 +1,13 @@
 import { Settings } from 'lucide-react'
+import type { ChatMessage } from '../types'
 
-function RightChatPanel({ messages, selectedMessage, setSelectedMessage }) {
+interface RightChatPanelProps {
+  messages: ChatMessage[]
+  selectedMessage: ChatMessage | null
+  setSelectedMessage: (message: ChatMessage | null) => void
+}
+
+function RightChatPanel({ messages, selectedMessage, setSelectedMessage }: RightChatPanelProps) {
   if (!messages || messages.length === 0) {
     return (
       <div className="h-full bg-white flex flex-col">
@@ -20,15 +27,15 @@ function RightChatPanel({ messages, selectedMessage, setSelectedMessage }) {
   return (
     <div className="h-full bg-white flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h2 className="font-semibold text-gray-800">Chat</h2>
+      <div className="p-3 md:p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        <h2 className="font-semibold text-sm md:text-base text-gray-800">Chat</h2>
         <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-          <Settings size={20} className="text-gray-600" />
+          <Settings size={18} className="text-gray-600 md:w-5 md:h-5" />
         </button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6 space-y-3 md:space-y-4 min-h-0">
         {messages.map((message) => {
           // Client messages go LEFT, Server messages go RIGHT
           const isClientMessage = message.sender === 'client'
@@ -65,10 +72,10 @@ function RightChatPanel({ messages, selectedMessage, setSelectedMessage }) {
               onClick={() => setSelectedMessage(message)}
               className={`flex ${isClientMessage ? 'justify-start' : 'justify-end'} cursor-pointer`}
             >
-              <div className={`flex flex-col ${isClientMessage ? 'items-start' : 'items-end'} max-w-[80%]`}>
+              <div className={`flex flex-col ${isClientMessage ? 'items-start' : 'items-end'} max-w-[85%] md:max-w-[80%]`}>
                 {/* Chat Bubble */}
                 <div
-                  className={`relative rounded-2xl px-4 py-3 ${
+                  className={`relative rounded-2xl px-3 py-2 md:px-4 md:py-3 ${
                     isSelected ? 'ring-2 ring-blue-400' : ''
                   } ${isClientMessage ? 'bg-blue-100' : 'bg-gray-200'}`}
                   style={{
