@@ -1,0 +1,15 @@
+{
+  "name": "82ch",
+  "version": "1.0.0",
+  "description": "MCP Security Framework with Desktop UI",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run front\" --names \"server,front\" --prefix-colors \"blue,green\"",
+    "server": "python server.py",
+    "front": "cd front && npm run dev",
+    "install-all": "npm install && cd front && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
