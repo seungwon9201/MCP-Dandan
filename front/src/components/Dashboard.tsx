@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Shield, FileWarning, Database, LucideIcon } from 'lucide-react'
 import type { MCPServer, DetectedEvent, ThreatStats, TimelineData, TopServer } from '../types'
 
-const API_BASE_URL = 'http://localhost:3001/api'
-
 interface ThreatDefinition {
   name: string
   description: string
@@ -65,14 +63,7 @@ function Dashboard({ setSelectedServer, servers }: DashboardProps) {
 
   const fetchDashboardData = async () => {
     try {
-      // Use Electron IPC if available, otherwise fall back to HTTP API
-      let engineResults
-      if (window.electronAPI) {
-        engineResults = await window.electronAPI.getEngineResults()
-      } else {
-        const response = await fetch(`${API_BASE_URL}/engine-results`)
-        engineResults = await response.json()
-      }
+      const engineResults = await window.electronAPI.getEngineResults()
 
       // Process data for dashboard
       const events: DetectedEvent[] = []

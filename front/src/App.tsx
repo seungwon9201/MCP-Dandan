@@ -6,8 +6,6 @@ import RightChatPanel from './components/RightChatPanel'
 import Dashboard from './components/Dashboard'
 import type { MCPServer, ChatMessage } from './types'
 
-const API_BASE_URL = 'http://localhost:3001/api'
-
 function App() {
   const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState<boolean>(true)
   const [selectedServer, setSelectedServer] = useState<MCPServer | null>(null)
@@ -41,15 +39,8 @@ function App() {
 
   const fetchServers = async () => {
     try {
-      // Use Electron IPC if available, otherwise fall back to HTTP API
-      if (window.electronAPI) {
-        const data = await window.electronAPI.getServers()
-        setMcpServers(data)
-      } else {
-        const response = await fetch(`${API_BASE_URL}/servers`)
-        const data = await response.json()
-        setMcpServers(data)
-      }
+      const data = await window.electronAPI.getServers()
+      setMcpServers(data)
       setLoading(false)
     } catch (error) {
       console.error('Error fetching servers:', error)
@@ -59,15 +50,8 @@ function App() {
 
   const fetchMessages = async (serverId: string | number) => {
     try {
-      // Use Electron IPC if available, otherwise fall back to HTTP API
-      if (window.electronAPI) {
-        const data = await window.electronAPI.getServerMessages(Number(serverId))
-        setChatMessages(data)
-      } else {
-        const response = await fetch(`${API_BASE_URL}/servers/${serverId}/messages`)
-        const data = await response.json()
-        setChatMessages(data)
-      }
+      const data = await window.electronAPI.getServerMessages(Number(serverId))
+      setChatMessages(data)
     } catch (error) {
       console.error('Error fetching messages:', error)
       setChatMessages([])
