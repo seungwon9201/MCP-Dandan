@@ -54,12 +54,14 @@ CREATE INDEX IF NOT EXISTS idx_serverName ON engine_results(serverName);
 
 -- MCPL(tools/call list)
 Create table if not exists mcpl (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     mcpTag TEXT NOT NULL    ,  -- mcpTag
     producer TEXT NOT NULL  ,  -- producer
-    tool TEXT PRIMARY key   ,  -- name
+    tool TEXT NOT NULL      ,  -- name
     tool_title TEXT         ,  -- title
     tool_description TEXT   ,  -- description
     tool_parameter TEXT     ,  -- inputschema
     annotations TEXT        ,  -- annotations
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(mcpTag, tool)    -- mcpTag와 tool 조합으로 유니크 제약
 );

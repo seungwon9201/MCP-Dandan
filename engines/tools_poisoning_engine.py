@@ -122,8 +122,8 @@ class ToolsPoisoningEngine(BaseEngine):
         else:
             mcp_tag = data.get('mcpTag') or data.get('data', {}).get('mcpTag', 'unknown')
 
-        print(f"[ToolsPoisoningEngine] Analyzing tools from MCP server: {mcp_tag}")
-        print(f"[ToolsPoisoningEngine] Number of tools: {len(tools_info)}")
+        # print(f"[ToolsPoisoningEngine] Analyzing tools from MCP server: {mcp_tag}")
+        # print(f"[ToolsPoisoningEngine] Number of tools: {len(tools_info)}")
 
         # 각 tool에 대해 LLM 분석 수행
         import asyncio
@@ -140,7 +140,7 @@ class ToolsPoisoningEngine(BaseEngine):
                 await asyncio.sleep(1.0)  # 1초 대기
 
             # LLM으로 분석
-            verdict, confidence = await self._analyze_with_llm(tool_name, tool_description)
+            verdict, confidence, reason = await self._analyze_with_llm(tool_name, tool_description)
 
             if verdict == 'DENY':
                 findings.append({
@@ -148,12 +148,12 @@ class ToolsPoisoningEngine(BaseEngine):
                     'description': tool_description,
                     'verdict': verdict,
                     'confidence': confidence,
-                    'reason': 'Potential prompt injection or malicious instruction detected in tool description'
+                    'reason': reason if reason else 'Potential prompt injection or malicious instruction detected in tool description'
                 })
 
         # 탐지되지 않은 경우
         if not findings:
-            print(f"[ToolsPoisoningEngine] No malicious tools detected")
+            # print(f"[ToolsPoisoningEngine] No malicious tools detected")
             return None
 
         # 각 finding을 개별 결과로 변환
@@ -177,11 +177,8 @@ class ToolsPoisoningEngine(BaseEngine):
             )
             results.append(result)
 
-        print(f"[ToolsPoisoningEngine] Malicious tools detected!")
-        print(f"[ToolsPoisoningEngine] Total findings: {len(findings)}")
-
-        # 디버깅용 결과 출력
-        self._print_detection_results(results)
+        # print(f"[ToolsPoisoningEngine] Malicious tools detected!")
+        # print(f"[ToolsPoisoningEngine] Total findings: {len(findings)}")
 
         return results
 
@@ -208,12 +205,12 @@ class ToolsPoisoningEngine(BaseEngine):
             print(f"[ToolsPoisoningEngine] Error extracting tools info: {e}")
             return []
 
-    async def _analyze_with_llm(self, tool_name: str, tool_description: str) -> tuple[str, float]:
+    async def _analyze_with_llm(self, tool_name: str, tool_description: str) -> tuple[str, float, str]:
         """
         Mistral LLM을 사용하여 tool description 분석
 
         Returns:
-            (verdict, confidence): ('ALLOW' or 'DENY', confidence score 0-100)
+            (verdict, confidence, reason): ('ALLOW' or 'DENY', confidence score 0-100, reason for verdict)
         """
         import asyncio
         max_retries = 3
@@ -240,22 +237,104 @@ class ToolsPoisoningEngine(BaseEngine):
                 )
 
                 # 응답 파싱
-                llm_response = response.choices[0].message.content.strip().upper()
+                llm_response = response.choices[0].message.content.strip()
 
-                # ALLOW 또는 DENY 추출
-                if 'DENY' in llm_response:
-                    verdict = 'DENY'
-                    confidence = 85.0  # DENY의 경우 높은 신뢰도
-                elif 'ALLOW' in llm_response:
-                    verdict = 'ALLOW'
-                    confidence = 90.0  # ALLOW의 경우 높은 신뢰도
-                else:
-                    # 예상치 못한 응답
-                    print(f"[ToolsPoisoningEngine] Unexpected LLM response: {llm_response}")
-                    verdict = 'ALLOW'
-                    confidence = 50.0
+                # JSON 파싱 시도
+                import json
 
-                return verdict, confidence
+                try:
+                    # ```json 또는 ```JSON으로 감싸진 경우 제거
+                    cleaned_response = llm_response.strip()
+
+                    # 코드 블록 마커 제거 - endswith 조건 제거
+                    if cleaned_response.startswith('```'):
+                        # 첫 번째 줄 제거 (```json 또는 ```)
+                        first_newline = cleaned_response.find('\n')
+                        if first_newline != -1:
+                            cleaned_response = cleaned_response[first_newline + 1:]
+
+                        # 마지막 ``` 제거 (무조건 찾아서 제거)
+                        last_backticks = cleaned_response.rfind('```')
+                        if last_backticks != -1:
+                            cleaned_response = cleaned_response[:last_backticks]
+
+                    # 앞뒤 공백 제거
+                    json_str = cleaned_response.strip()
+
+                    # JSON 파싱
+                    parsed = json.loads(json_str)
+
+                    if isinstance(parsed, list) and len(parsed) > 0:
+                        result = parsed[0]
+
+                        # is_malicious 필드 확인 (대소문자 무관)
+                        is_malicious = None
+                        for key in result:
+                            if key.lower() == 'is_malicious':
+                                is_malicious = result[key]
+                                break
+
+                        if is_malicious == 1:
+                            verdict = 'DENY'
+                            confidence = 85.0
+
+                            # reason 추출 (대소문자 무관)
+                            reason = None
+                            for key in result:
+                                if key.lower() == 'reason':
+                                    reason = result[key]
+                                    break
+
+                            # function_name 추출
+                            function_name = tool_name
+                            for key in result:
+                                if key.lower() == 'function_name':
+                                    function_name = result[key]
+                                    break
+
+                            # 결과 출력 (악성: 높은 점수)
+                            print(f'[ToolsPoisoningEngine] "function_name": "{function_name}", "is_malicious": 1, "score": {confidence}, "reason": "{reason}"')
+
+                            return verdict, confidence, reason if reason else 'Malicious tool detected'
+                        else:
+                            verdict = 'ALLOW'
+                            confidence = 10.0  # 정상인 경우 낮은 점수
+                            print(f'[ToolsPoisoningEngine] "function_name": "{tool_name}", "is_malicious": 0, "score": {confidence}')
+
+                            return verdict, confidence, None
+                    else:
+                        # JSON 형식이지만 예상과 다른 경우
+                        print(f"[ToolsPoisoningEngine] Unexpected JSON structure: {parsed}")
+                        verdict = 'ALLOW'
+                        confidence = 50.0
+                        return verdict, confidence, None
+
+                except (json.JSONDecodeError, KeyError, IndexError) as e:
+                    # JSON 파싱 실패 - 기존 방식으로 fallback
+                    llm_response_upper = llm_response.upper()
+                    if 'DENY' in llm_response_upper or 'IS_MALICIOUS": 1' in llm_response_upper:
+                        verdict = 'DENY'
+                        confidence = 85.0
+                        # reason 추출 시도
+                        try:
+                            reason_start = llm_response.find('"reason"')
+                            if reason_start != -1:
+                                reason_text = llm_response[reason_start:reason_start+200]
+                                print(f'[ToolsPoisoningEngine] "function_name": "{tool_name}", "is_malicious": 1, "score": {confidence}, "reason": "{reason_text[:100]}..."')
+                            else:
+                                print(f'[ToolsPoisoningEngine] "function_name": "{tool_name}", "is_malicious": 1, "score": {confidence}, "reason": "Detected via text analysis"')
+                        except:
+                            print(f'[ToolsPoisoningEngine] "function_name": "{tool_name}", "is_malicious": 1, "score": {confidence}, "reason": "Detected via text analysis"')
+                        return verdict, confidence, 'Detected via text analysis'
+                    elif 'ALLOW' in llm_response_upper or 'IS_MALICIOUS": 0' in llm_response_upper:
+                        verdict = 'ALLOW'
+                        confidence = 10.0  # 정상인 경우 낮은 점수
+                        print(f'[ToolsPoisoningEngine] "function_name": "{tool_name}", "is_malicious": 0, "score": {confidence}')
+                        return verdict, confidence, None
+                    else:
+                        verdict = 'ALLOW'
+                        confidence = 20.0  # 불명확한 경우 약간 높은 점수
+                        return verdict, confidence, None
 
             except Exception as e:
                 error_msg = str(e)
@@ -269,12 +348,12 @@ class ToolsPoisoningEngine(BaseEngine):
                         continue
                     else:
                         print(f"[ToolsPoisoningEngine] Rate limit exceeded after {max_retries} attempts: {e}")
-                        return 'ALLOW', 0.0
+                        return 'ALLOW', 0.0, None
                 else:
                     print(f"[ToolsPoisoningEngine] Error in LLM analysis: {e}")
-                    return 'ALLOW', 0.0
+                    return 'ALLOW', 0.0, None
 
-        return 'ALLOW', 0.0
+        return 'ALLOW', 0.0, None
 
     def _calculate_severity(self, malicious_count: int, total_count: int) -> str:
         """
@@ -397,76 +476,3 @@ class ToolsPoisoningEngine(BaseEngine):
         }
 
         return result
-
-    def _print_detection_results(self, results: list) -> None:
-        """
-        탐지 결과들을 읽기 쉬운 형식으로 출력 (디버깅용)
-        """
-        print("\n" + "=" * 80)
-        print("[ToolsPoisoningEngine] DETECTION RESULTS")
-        print("=" * 80)
-
-        if not results:
-            print("탐지된 도구 없음")
-            print("=" * 80 + "\n")
-            return
-
-        # 첫 번째 결과에서 공통 정보 추출
-        first_res = results[0].get('result', {})
-        print(f"엔진 이름      : {first_res.get('detector', 'N/A')}")
-        print(f"MCP 서버      : {first_res.get('mcp_server', 'N/A')}")
-        print(f"Producer      : {first_res.get('producer', 'N/A')}")
-        print(f"탐지 시간      : {first_res.get('detection_time', 'N/A')}")
-        print("-" * 80)
-
-        # 각 도구별 결과 출력
-        print(f"탐지된 악성 도구 ({len(results)}개):")
-        for i, result in enumerate(results, 1):
-            res = result.get('result', {})
-            print(f"\n  [{i}] {res.get('tool_name', 'N/A')}")
-            print(f"      - Verdict    : {res.get('verdict', 'N/A')}")
-            print(f"      - Confidence : {res.get('confidence', 'N/A'):.1f}%")
-            print(f"      - Severity   : {res.get('severity', 'N/A')}")
-            print(f"      - Score      : {res.get('evaluation', 'N/A')}")
-            print(f"      - Detail     : {res.get('detail', 'N/A')[:120]}...")
-            desc = res.get('tool_description', 'N/A')
-            if len(desc) > 100:
-                desc = desc[:100] + "..."
-            print(f"      - Description: {desc}")
-
-        print("=" * 80 + "\n")
-
-    def _print_detection_result(self, result: dict) -> None:
-        """
-        탐지 결과를 읽기 쉬운 형식으로 출력 (레거시 - 디버깅용)
-        """
-        print("\n" + "=" * 80)
-        print("[ToolsPoisoningEngine] DETECTION RESULT")
-        print("=" * 80)
-
-        res = result.get('result', {})
-
-        # 기본 정보
-        print(f"엔진 이름      : {res.get('detector', 'N/A')}")
-        print(f"MCP 서버      : {res.get('mcp_server', 'N/A')}")
-        print(f"Producer      : {res.get('producer', 'N/A')}")
-        print(f"Severity      : {res.get('severity', 'N/A')}")
-        print(f"Score         : {res.get('evaluation', 'N/A')}")
-        print(f"탐지 시간      : {res.get('detection_time', 'N/A')}")
-        print("-" * 80)
-
-        # 상세 정보
-        print(f"Detail        : {res.get('detail', 'N/A')}")
-        print("-" * 80)
-
-        # Findings 상세
-        findings = res.get('findings', [])
-        print(f"탐지된 악성 도구 ({len(findings)}개):")
-        for i, finding in enumerate(findings, 1):
-            print(f"\n  [{i}] {finding.get('tool_name', 'N/A')}")
-            print(f"      - Verdict    : {finding.get('verdict', 'N/A')}")
-            print(f"      - Confidence : {finding.get('confidence', 'N/A'):.1f}%")
-            print(f"      - Reason     : {finding.get('reason', 'N/A')}")
-            print(f"      - Description: {finding.get('description', 'N/A')[:100]}...")
-
-        print("=" * 80 + "\n")

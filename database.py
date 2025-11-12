@@ -318,7 +318,7 @@ class Database:
                       AND e.mcpTag IN (SELECT mcpTag FROM rpc_events WHERE method = 'tools/list')
                       AND e.message_id = '1'
                 )
-                INSERT INTO mcpl (mcpTag, producer, tool, tool_title, tool_description, tool_parameter, annotations)
+                INSERT OR IGNORE INTO mcpl (mcpTag, producer, tool, tool_title, tool_description, tool_parameter, annotations)
                 SELECT
                     td.mcpTag,
                     td.mcptype,
@@ -344,3 +344,27 @@ class Database:
         except Exception as e:
             print(f'mcpl insert failed : {e}')
             return None
+
+    async def get_recent_mcpl_tools(self, limit: int = None) -> List[Dict[str, Any]]:
+        """
+        Get recently inserted tools from mcpl table
+
+        Args:
+            limit: Maximum number of tools to retrieve (None = all)
+
+        Returns:
+            List of dictionaries with tool and tool_description
+        """
+        try:
+            query = "SELECT tool, tool_description, mcpTag, producer FROM mcpl ORDER BY id DESC"
+            if limit:
+                query += f" LIMIT {limit}"
+
+            async with self.conn.execute(query) as cursor:
+                rows = await cursor.fetchall()
+                columns = [description[0] for description in cursor.description]
+                return [dict(zip(columns, row)) for row in rows]
+
+        except Exception as e:
+            print(f'mcpl 조회 실패: {e}')
+            return []
