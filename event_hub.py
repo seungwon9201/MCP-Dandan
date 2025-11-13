@@ -33,7 +33,23 @@ class EventHub:
         """Stop the EventHub."""
         self.running = False
 
-        # Restore Claude and Cursor configs on shutdown
+        # 모든 백그라운드 태스크 취소
+        if self.background_tasks:
+            print(f'[EventHub] Cancelling {len(self.background_tasks)} background tasks...')
+            for task in self.background_tasks:
+                if not task.done():
+                    task.cancel()
+
+            # 태스크가 완전히 취소될 때까지 대기
+            try:
+                await asyncio.gather(*self.background_tasks, return_exceptions=True)
+                print('[EventHub] All background tasks cancelled')
+            except Exception as e:
+                print(f'[EventHub] Error cancelling tasks: {e}')
+
+            self.background_tasks.clear()
+
+        # Restore Claude config on shutdown
         import subprocess
         try:
             subprocess.run(['python', './transports/config_finder.py', '--restore', '--app', 'all'],
