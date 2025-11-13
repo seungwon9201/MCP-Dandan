@@ -72,9 +72,16 @@ const createWindow = () => {
 }
 
 // 앱이 준비되면 윈도우 생성
-app.whenReady().then(() => {
-  // Initialize database
-  initializeDatabase()
+app.whenReady().then(async () => {
+  // Wait for backend server to be ready before initializing database
+  const backendReady = await waitForBackend()
+
+  if (backendReady) {
+    // Initialize database
+    initializeDatabase()
+  } else {
+    console.error('[Electron] Starting app without backend connection - some features may not work')
+  }
 
   createWindow()
 
@@ -100,6 +107,33 @@ app.on('will-quit', () => {
 
 // Database setup
 let db: BetterSqlite3.Database | null = null
+
+// Wait for backend server to be ready
+async function waitForBackend(): Promise<boolean> {
+  const maxAttempts = 30
+  const delayMs = 1000
+
+  console.log('[Electron] Waiting for backend server to be ready...')
+
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const response = await fetch('http://localhost:28173/health')
+      if (response.ok) {
+        console.log('[Electron] Backend server is ready')
+        return true
+      }
+    } catch (error) {
+      // Server not ready yet, continue waiting
+      console.log(`[Electron] Backend not ready yet, attempt ${i + 1}/${maxAttempts}`)
+    }
+
+    // Wait before next attempt
+    await new Promise(resolve => setTimeout(resolve, delayMs))
+  }
+
+  console.error('[Electron] Backend server failed to start within timeout')
+  return false
+}
 
 function initializeDatabase() {
   try {
@@ -158,46 +192,73 @@ function getMcpServersFromDB() {
   }
 
   try {
-    const query = `
-      SELECT
-        mcpTag,
-        producer,
-        tool,
-        tool_title,
-        tool_description,
-        tool_parameter,
-        annotations,
-        created_at
-      FROM mcpl
-      ORDER BY mcpTag, created_at
+    // First, get the app name (pname) and producer for each server from raw_events
+    const appNameQuery = `
+      SELECT DISTINCT mcpTag, pname, producer
+      FROM raw_events
+      WHERE mcpTag IS NOT NULL AND mcpTag != 'unknown'
     `
-    console.log(`[DB] Executing query: ${query.trim()}`)
+    const appNames = db.prepare(appNameQuery).all() as any[]
+    const appNameMap = new Map()
+    const producerMap = new Map()
+    appNames.forEach(row => {
+      appNameMap.set(row.mcpTag, row.pname || 'Unknown')
+      producerMap.set(row.mcpTag, row.producer || 'local')
+    })
+    console.log(`[DB] Found app names for ${appNameMap.size} servers`)
 
-    const rows = db.prepare(query).all() as any[]
-    console.log(`[DB] Query returned ${rows.length} rows`)
+    // Helper function to get icon based on app name
+    const getIconForApp = (appName: string) => {
+      const lowerAppName = (appName || '').toLowerCase()
+      if (lowerAppName.includes('claude')) return 'claude.svg'
+      if (lowerAppName.includes('cursor')) return 'cursor.svg'
+      return 'default.svg'
+    }
 
     // Group tools by mcpTag (server name)
     const serverMap = new Map()
 
-    rows.forEach(row => {
+    // First, add all servers from raw_events (so servers without tools/list also appear)
+    appNames.forEach(row => {
       const serverName = row.mcpTag
+      const appName = appNameMap.get(serverName) || 'Unknown'
 
       if (!serverMap.has(serverName)) {
         serverMap.set(serverName, {
           id: serverMap.size + 1,
           name: serverName,
-          type: row.producer || 'local',
-          icon: '🔧',
+          type: producerMap.get(serverName) || 'local',
+          icon: getIconForApp(appName),
+          appName: appName,
           tools: []
         })
-        console.log(`[DB] Added new server: ${serverName}`)
+        console.log(`[DB] Added server: ${serverName} (app: ${appName})`)
       }
+    })
 
-      const server = serverMap.get(serverName)
-      server.tools.push({
-        name: row.tool,
-        description: row.tool_description || ''
-      })
+    // Get tools from mcpl table and add them to existing servers
+    const query = `
+      SELECT
+        mcpTag,
+        tool,
+        tool_title,
+        tool_description
+      FROM mcpl
+      ORDER BY mcpTag, created_at
+    `
+    console.log(`[DB] Executing query for tools: ${query.trim()}`)
+
+    const rows = db.prepare(query).all() as any[]
+    console.log(`[DB] Query returned ${rows.length} tool rows`)
+
+    rows.forEach(row => {
+      const server = serverMap.get(row.mcpTag)
+      if (server) {
+        server.tools.push({
+          name: row.tool,
+          description: row.tool_description || ''
+        })
+      }
     })
 
     const servers = Array.from(serverMap.values())
@@ -291,23 +352,36 @@ ipcMain.handle('api:servers:messages', (_event, serverId: number) => {
       const maliciousScore = 0
 
       // Convert ts to readable timestamp
-      // Try to handle different timestamp formats
+      // Handle both string timestamps and numeric timestamps
       let timestamp: string
       try {
-        // Check if ts is in nanoseconds (very large number)
-        if (row.ts > 1e15) {
-          // Nanoseconds to milliseconds
-          const tsInMs = Math.floor(row.ts / 1000000)
-          timestamp = new Date(tsInMs).toISOString()
-        } else if (row.ts > 1e12) {
-          // Already in milliseconds
-          timestamp = new Date(row.ts).toISOString()
+        if (typeof row.ts === 'string') {
+          // If it's a string in ISO format or similar, try to parse directly
+          // Format: "2025-11-12 16:53:17.613"
+          const parsedDate = new Date(row.ts.replace(' ', 'T') + 'Z')
+          if (!isNaN(parsedDate.getTime())) {
+            timestamp = parsedDate.toISOString()
+          } else {
+            throw new Error('Invalid date string')
+          }
+        } else if (typeof row.ts === 'number') {
+          // Check if ts is in nanoseconds (very large number)
+          if (row.ts > 1e15) {
+            // Nanoseconds to milliseconds
+            const tsInMs = Math.floor(row.ts / 1000000)
+            timestamp = new Date(tsInMs).toISOString()
+          } else if (row.ts > 1e12) {
+            // Already in milliseconds
+            timestamp = new Date(row.ts).toISOString()
+          } else {
+            // Seconds to milliseconds
+            timestamp = new Date(row.ts * 1000).toISOString()
+          }
         } else {
-          // Seconds to milliseconds
-          timestamp = new Date(row.ts * 1000).toISOString()
+          throw new Error('Unknown timestamp format')
         }
       } catch (e) {
-        console.error(`[DB] Error converting timestamp for event ${row.id}, ts=${row.ts}:`, e)
+        console.error(`[DB] Error converting timestamp for event ${row.id}, ts=${row.ts}, type=${typeof row.ts}:`, e)
         timestamp = new Date().toISOString() // Use current time as fallback
       }
 
