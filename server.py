@@ -23,7 +23,6 @@ from config import config
 # Engine components
 from database import Database
 from event_hub import EventHub
-from engines.sensitive_file_engine import SensitiveFileEngine
 from engines.tools_poisoning_engine import ToolsPoisoningEngine
 from engines.command_injection_engine import CommandInjectionEngine
 from engines.file_system_exposure_engine import FileSystemExposureEngine
@@ -33,18 +32,10 @@ def setup_engines(db: Database) -> list:
     """Initialize and configure detection engines based on config."""
     engines = []
 
-    # Sensitive File Engine
-    if config.get_sensitive_file_enabled():
-        try:
-            engine = SensitiveFileEngine(db)
-            engines.append(engine)
-        except Exception as e:
-            print(f"[Engine] Failed to initialize SensitiveFileEngine: {e}")
-
     # Tools Poisoning Engine (LLM-based)
     if config.get_tools_poisoning_enabled():
         try:
-            engine = ToolsPoisoningEngine(db, detail_mode=True)
+            engine = ToolsPoisoningEngine(db)
             engines.append(engine)
         except Exception as e:
             print(f"[Engine] Failed to initialize ToolsPoisoningEngine: {e}")
@@ -148,6 +139,18 @@ async def on_startup(app):
     print("=" * 80)
     print("Observer + Engine integrated mode")
     print("=" * 80)
+
+    # Configure Claude Desktop config on startup
+    import subprocess
+    try:
+        result = subprocess.run(['python', './transports/config_finder.py'],
+                              capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            print("\n[Config] Claude Desktop configured successfully")
+        else:
+            print(f"\n[Config] Warning: Configuration failed - {result.stderr}")
+    except Exception as e:
+        print(f"\n[Config] Warning: Failed to configure Claude Desktop - {e}")
 
     # Initialize engine system
     try:
