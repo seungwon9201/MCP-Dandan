@@ -213,6 +213,10 @@ class ToolsPoisoningEngine(BaseEngine):
                         progress = int((status.analyzed_tools / status.total_tools * 100) if status.total_tools > 0 else 0)
                         print(f"[ToolsPoisoningEngine] [{mcp_tag}] Progress: {status.analyzed_tools}/{status.total_tools} ({progress}%) - {tool_name}: {verdict}", flush=True)
 
+                # Update tool safety in mcpl table
+                is_safe = (verdict == 'ALLOW')
+                await self.db.update_tool_safety(mcp_tag, tool_name, is_safe)
+
                 if verdict == 'DENY':
                     # 악성으로 판정된 경우에만 결과 생성
                     detection_time = datetime.now().isoformat()

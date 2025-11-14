@@ -388,3 +388,34 @@ class Database:
         except Exception as e:
             print(f'mcpl 조회 실패: {e}')
             return []
+
+    async def update_tool_safety(self, mcp_tag: str, tool_name: str, is_safe: bool) -> bool:
+        """
+        Update safety status for a specific tool in mcpl table.
+
+        Args:
+            mcp_tag: MCP server tag
+            tool_name: Tool name
+            is_safe: True for ALLOW (safety=1), False for DENY (safety=2)
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        try:
+            safety_value = 1 if is_safe else 2
+            await self.conn.execute(
+                """
+                UPDATE mcpl
+                SET safety = ?,
+                    safety_checked_at = CURRENT_TIMESTAMP
+                WHERE mcpTag = ? AND tool = ?
+                """,
+                (safety_value, mcp_tag, tool_name)
+            )
+            await self.conn.commit()
+            print(f'[DB] Updated safety for {mcp_tag}/{tool_name}: {"ALLOW" if is_safe else "DENY"}')
+            return True
+
+        except Exception as e:
+            print(f'[DB] Failed to update tool safety: {e}')
+            return False

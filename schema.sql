@@ -62,6 +62,8 @@ Create table if not exists mcpl (
     tool_description TEXT   ,  -- description
     tool_parameter TEXT     ,  -- inputschema
     annotations TEXT        ,  -- annotations
+    safety INTEGER DEFAULT 0,  -- 0: 검사 전, 1: 안전(ALLOW), 2: 위험(DENY)
+    safety_checked_at DATETIME,  -- 검사 완료 시간
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(mcpTag, tool)    -- mcpTag와 tool 조합으로 유니크 제약
 );

@@ -32,16 +32,25 @@ function MiddleTopPanel({ serverInfo }: MiddleTopPanelProps) {
         <div>
           <h3 className="text-xs md:text-sm font-semibold text-gray-500 mb-3">Available Tools</h3>
           <div className="space-y-3 md:space-y-4">
-            {serverInfo.tools.map((tool, index) => (
-              <div key={index} className="border-l-4 border-blue-400 pl-3 md:pl-4 py-2">
-                <h4 className="font-mono text-xs md:text-sm font-semibold text-gray-800 mb-1 break-words">
-                  {tool.name}
-                </h4>
-                <p className="text-xs text-gray-600 leading-relaxed break-words">
-                  {tool.description}
-                </p>
-              </div>
-            ))}
+            {serverInfo.tools.map((tool, index) => {
+              // Determine border color based on safety status
+              // 0: 검사 전 (회색), 1: 안전 (파랑), 2: 위험 (빨강)
+              const borderColor =
+                tool.safety === 1 ? 'border-blue-400' :  // 안전 (ALLOW)
+                tool.safety === 2 ? 'border-red-500' :    // 위험 (DENY)
+                'border-gray-400'                         // 검사 전 또는 undefined
+
+              return (
+                <div key={index} className={`border-l-4 ${borderColor} pl-3 md:pl-4 py-2`}>
+                  <h4 className="font-mono text-xs md:text-sm font-semibold text-gray-800 mb-1 break-words">
+                    {tool.name}
+                  </h4>
+                  <p className="text-xs text-gray-600 leading-relaxed break-words">
+                    {tool.description}
+                  </p>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

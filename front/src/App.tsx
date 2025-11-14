@@ -29,6 +29,16 @@ function App() {
     fetchServers()
   }, [])
 
+  // Auto-refresh servers every 1 second
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      fetchServers()
+    }, 1000)
+
+    // Cleanup on unmount
+    return () => clearInterval(intervalId)
+  }, [])
+
   // Fetch messages when server is selected
   useEffect(() => {
     if (selectedServer) {
