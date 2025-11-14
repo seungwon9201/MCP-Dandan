@@ -78,18 +78,39 @@ class EventHub:
             # Step 1: 즉시 DB 저장 (빠른 응답)
             await self._save_event(event)
 
-            # Step 2: 백그라운드에서 엔진 분석 실행 
+            # Step 2: 백그라운드에서 엔진 분석 실행
             asyncio.create_task(self._analyze_event_async(event))
 
         except Exception as e:
             print(f'[EventHub] Error processing event: {e}')
 
-    async def _analyze_event_async(self, event: Dict[str, Any]) -> None:
+    async def process_event_sync(self, event: Dict[str, Any]) -> None:
+        """
+        이벤트를 동기적으로 처리 (tools/list 검사 시 사용).
+
+        Args:
+            event: Event dictionary with eventType, producer, data, etc.
+        """
+        if not self.running:
+            return
+
+        try:
+            # Step 1: 즉시 DB 저장
+            await self._save_event(event)
+
+            # Step 2: 엔진 분석을 동기적으로 수행 (기다림)
+            await self._analyze_event_async(event, sync_mode=True)
+
+        except Exception as e:
+            print(f'[EventHub] Error processing event synchronously: {e}')
+
+    async def _analyze_event_async(self, event: Dict[str, Any], sync_mode: bool = False) -> None:
         """
         백그라운드에서 엔진 분석 수행 및 결과 일괄 저장.
 
         Args:
             event: 분석할 이벤트
+            sync_mode: True이면 ToolsPoisoningEngine도 동기적으로 실행 (기다림)
         """
         try:
             # ToolsPoisoningEngine과 다른 엔진 분리
@@ -123,13 +144,17 @@ class EventHub:
                 if all_results:
                     await self._save_results_batch(all_results)
 
-            # ToolsPoisoningEngine은 완전히 독립적인 백그라운드 태스크로 실행
-            # 이렇게 하면 tools/list 응답이 즉시 반환됨
+            # ToolsPoisoningEngine 처리
             if tools_poisoning_engine:
-                task = asyncio.create_task(self._run_tools_poisoning_analysis(tools_poisoning_engine, event))
-                self.background_tasks.add(task)
-                # 태스크 완료 시 자동으로 제거
-                task.add_done_callback(self.background_tasks.discard)
+                if sync_mode:
+                    # 동기 모드: ToolsPoisoningEngine 완료까지 대기
+                    await self._run_tools_poisoning_analysis(tools_poisoning_engine, event)
+                else:
+                    # 비동기 모드: 백그라운드 태스크로 실행
+                    task = asyncio.create_task(self._run_tools_poisoning_analysis(tools_poisoning_engine, event))
+                    self.background_tasks.add(task)
+                    # 태스크 완료 시 자동으로 제거
+                    task.add_done_callback(self.background_tasks.discard)
 
         except Exception as e:
             print(f'[EventHub] Error in async analysis: {e}')
@@ -146,12 +171,15 @@ class EventHub:
             event: 분석할 이벤트
         """
         try:
+            print(f'[EventHub] _run_tools_poisoning_analysis STARTED')
             result = await self._process_with_engine(engine, event)
+            print(f'[EventHub] _run_tools_poisoning_analysis COMPLETED (result: {len(result) if isinstance(result, list) else "None" if result is None else "1"})')
 
             if result:
                 # 결과 저장
                 results_list = result if isinstance(result, list) else [result]
                 await self._save_results_batch(results_list)
+                print(f'[EventHub] _run_tools_poisoning_analysis SAVED {len(results_list)} results')
 
         except Exception as e:
             print(f'[EventHub] Error in ToolsPoisoningEngine analysis: {e}')
@@ -170,7 +198,8 @@ class EventHub:
                 self.event_id_map[event['ts']] = raw_event_id
 
                 # Save to type-specific tables
-                if event_type.lower() in ['rpc', 'jsonrpc', 'mcp']:
+                # Proxy와 MCP 모두 JSON-RPC 프로토콜이므로 rpc_events에 저장
+                if event_type.lower() in ['rpc', 'jsonrpc', 'mcp', 'proxy']:
                     await self.db.insert_rpc_event(event, raw_event_id)
 
                     # Extract MCP tool information if present

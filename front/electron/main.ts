@@ -242,7 +242,8 @@ function getMcpServersFromDB() {
         mcpTag,
         tool,
         tool_title,
-        tool_description
+        tool_description,
+        safety
       FROM mcpl
       ORDER BY mcpTag, created_at
     `
@@ -256,14 +257,27 @@ function getMcpServersFromDB() {
       if (server) {
         server.tools.push({
           name: row.tool,
-          description: row.tool_description || ''
+          description: row.tool_description || '',
+          safety: row.safety || 0  // 0: 검사 전, 1: 안전, 2: 위험
         })
       }
     })
 
-    const servers = Array.from(serverMap.values())
+    // Calculate safety status for each server
+    const servers = Array.from(serverMap.values()).map(server => {
+      const tools = server.tools
+      const hasUnchecked = tools.some(t => t.safety === 0)
+      const hasDangerous = tools.some(t => t.safety === 2)
+
+      return {
+        ...server,
+        isChecking: hasUnchecked,  // 검사 중인 도구가 있는가
+        hasDanger: hasDangerous     // 위험한 도구가 있는가
+      }
+    })
+
     console.log(`[DB] Returning ${servers.length} servers`)
-    servers.forEach(s => console.log(`[DB]   - ${s.name}: ${s.tools.length} tools`))
+    servers.forEach(s => console.log(`[DB]   - ${s.name}: ${s.tools.length} tools, checking: ${s.isChecking}, danger: ${s.hasDanger}`))
 
     return servers
   } catch (error) {
@@ -319,7 +333,7 @@ ipcMain.handle('api:servers:messages', (_event, serverId: number) => {
         COALESCE(MAX(er.score), 0) as max_score
       FROM raw_events re
       LEFT JOIN engine_results er ON re.id = er.raw_event_id
-      WHERE re.mcpTag = ? AND re.event_type = 'MCP'
+      WHERE re.mcpTag = ? AND re.event_type IN ('MCP', 'Proxy')
       GROUP BY re.id
       ORDER BY re.ts ASC
     `
@@ -396,6 +410,7 @@ ipcMain.handle('api:servers:messages', (_event, serverId: number) => {
         sender: sender,
         timestamp: timestamp,
         maliciousScore: maliciousScore,
+        event_type: row.event_type,  // event_type 추가 (Proxy 또는 MCP)
         data: {
           message: parsedData.message || parsedData
         }

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MessageSquare, Settings, LayoutDashboard, ChevronDown } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MessageSquare, Settings, LayoutDashboard, ChevronDown, Clock, AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
 import type { MCPServer } from '../types'
 
@@ -78,8 +78,18 @@ function LeftSidebar({ isOpen, setIsOpen, servers, selectedServer, setSelectedSe
                       e.currentTarget.src = '/logos/default.svg'
                     }}
                   />
-                  <div className="flex flex-col">
-                    <span className="text-sm text-gray-700 font-medium">{server.name}</span>
+                  <div className="flex flex-col flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700 font-medium">{server.name}</span>
+                      {/* 검사 중 아이콘 (회전하는 시계) */}
+                      {server.isChecking && (
+                        <Clock size={14} className="text-gray-500 animate-spin" />
+                      )}
+                      {/* 위험 아이콘 (!표시) */}
+                      {server.hasDanger && (
+                        <AlertTriangle size={14} className="text-red-500" />
+                      )}
+                    </div>
                     {server.appName && (
                       <span className="text-xs text-gray-500">{server.appName}</span>
                     )}

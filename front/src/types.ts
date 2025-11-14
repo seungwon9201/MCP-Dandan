@@ -3,6 +3,7 @@
 export interface MCPTool {
   name: string
   description: string
+  safety?: number  // 0: 검사 전, 1: 안전(ALLOW), 2: 위험(DENY)
 }
 
 export interface MCPServer {
@@ -12,6 +13,8 @@ export interface MCPServer {
   icon: string
   appName?: string
   tools: MCPTool[]
+  isChecking?: boolean  // 검사 중인 도구가 있는가
+  hasDanger?: boolean   // 위험한 도구가 있는가
 }
 
 export interface ChatMessage {
@@ -22,6 +25,7 @@ export interface ChatMessage {
   serverId?: string | number
   type?: string
   maliciousScore?: number
+  event_type?: string  // 'MCP', 'Proxy' 등
   data?: {
     message?: {
       id?: string | number
