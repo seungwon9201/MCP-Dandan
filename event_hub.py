@@ -56,7 +56,7 @@ class EventHub:
         import subprocess
         try:
             subprocess.run(['python', './transports/config_finder.py', '--restore'],
-                         capture_output=True, text=True, timeout=10)
+                         capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
             safe_print('[EventHub] Claude config restored')
         except Exception as e:
             safe_print(f'[EventHub] Failed to restore config: {e}')

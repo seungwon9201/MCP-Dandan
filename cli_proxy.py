@@ -13,6 +13,13 @@ import requests
 from typing import Optional, Dict, Any
 from utils import safe_print
 
+# Force UTF-8 encoding for stdin/stdout to handle Unicode properly
+# This prevents encoding issues on Windows (cp949) and other systems
+if sys.stdin.encoding != 'utf-8':
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 
 # Configuration
 CONFIG = {
@@ -418,6 +425,8 @@ def main():
             stdout=subprocess.PIPE,
             stderr=sys.stderr,
             text=True,
+            encoding='utf-8',
+            errors='replace',  # Replace invalid UTF-8 bytes with � instead of surrogates
             bufsize=1,
             shell=use_shell
         )

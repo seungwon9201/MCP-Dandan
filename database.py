@@ -82,7 +82,20 @@ class Database:
             pid = event.get('pid')
             pname = event.get('pname')
             event_type = event.get('eventType', 'Unknown')
-            data = json.dumps(event.get('data', {}), ensure_ascii=False)
+
+            # Handle surrogate characters in data
+            data_dict = event.get('data', {})
+            # First, convert dict to JSON string (may contain surrogates)
+            data_with_surrogates = json.dumps(data_dict, ensure_ascii=False)
+            # Convert surrogates back to original bytes, then decode properly
+            try:
+                # Encode with surrogateescape to get original bytes
+                original_bytes = data_with_surrogates.encode('utf-8', errors='surrogateescape')
+                # Decode with proper encoding (try UTF-8 first, fallback to latin-1)
+                data = original_bytes.decode('utf-8', errors='replace')
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                # If conversion fails, use replace to ensure valid UTF-8
+                data = data_with_surrogates.encode('utf-8', errors='replace').decode('utf-8')
 
             match producer:
                 case 'local':
