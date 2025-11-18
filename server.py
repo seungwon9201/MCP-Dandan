@@ -11,6 +11,13 @@ import asyncio
 from aiohttp import web
 from utils import safe_print
 
+# Force UTF-8 encoding for stdin/stdout to handle Unicode properly
+# This prevents encoding issues on Windows (cp949) and other systems
+if sys.stdin.encoding != 'utf-8':
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 # Force unbuffered output for real-time logging
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)

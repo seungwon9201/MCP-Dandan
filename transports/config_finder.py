@@ -24,6 +24,13 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
 
+# Force UTF-8 encoding for stdin/stdout to handle Unicode properly
+# This prevents encoding issues on Windows (cp949) and other systems
+if sys.stdin.encoding != 'utf-8':
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 # Add parent directory to path to import utils
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils import safe_print
