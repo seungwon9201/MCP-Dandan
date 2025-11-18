@@ -185,7 +185,7 @@ async def on_startup(app):
     import subprocess
     try:
         result = subprocess.run(['python', './transports/config_finder.py'],
-                              capture_output=True, text=True, timeout=30)
+                             text=True, timeout=30)
         if result.returncode == 0:
             safe_print("\n[Config] Claude Desktop configured successfully")
         else:
