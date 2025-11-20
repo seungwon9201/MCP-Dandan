@@ -19,7 +19,7 @@ function MiddleTopPanel({ serverInfo }: MiddleTopPanelProps) {
         {/* Server Name */}
         <div className="mb-4 md:mb-6">
           <h3 className="text-xs md:text-sm font-semibold text-gray-500 mb-1">Server name</h3>
-          <p className="text-base md:text-lg font-medium text-gray-800 break-words">{serverInfo.name}</p>
+          <p className="text-base md:text-lg font-medium text-gray-800 wrap-break-words">{serverInfo.name}</p>
         </div>
 
         {/* Server Type */}
@@ -62,11 +62,11 @@ function MiddleTopPanel({ serverInfo }: MiddleTopPanelProps) {
 
               return (
                 <div key={index} className={`border-l-4 ${borderColor} pl-3 md:pl-4 py-2`}>
-                  <h4 className="font-mono text-xs md:text-sm font-semibold text-gray-800 mb-1 break-words">
+                  <h4 className="font-mono text-xs md:text-sm font-semibold text-gray-800 mb-1 wrap-break-words">
                     {tool.name}
                   </h4>
                   {textPart && (
-                    <p className="text-xs text-gray-600 leading-relaxed break-words mb-2">
+                    <p className="text-xs text-gray-600 leading-relaxed wrap-break-words mb-2">
                       {textPart}
                     </p>
                   )}
