@@ -35,13 +35,13 @@ class Config:
     # ========== Engine Settings ==========
 
     def get_tools_poisoning_enabled(self) -> bool:
-        return self.config.getboolean('Engine', 'tools_poisoning_enabled', fallback=False)
+        return self.config.getboolean('Engine', 'tools_poisoning_enabled', fallback=True)
 
     def get_command_injection_enabled(self) -> bool:
-        return self.config.getboolean('Engine', 'command_injection_enabled', fallback=False)
+        return self.config.getboolean('Engine', 'command_injection_enabled', fallback=True)
 
     def get_file_system_exposure_enabled(self) -> bool:
-        return self.config.getboolean('Engine', 'file_system_exposure_enabled', fallback=False)
+        return self.config.getboolean('Engine', 'file_system_exposure_enabled', fallback=True)
 
     def get_pii_filter_enabled(self) -> bool:
         return self.config.getboolean('Engine', 'pii_filter_engine_enabled', fallback=True)
