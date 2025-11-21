@@ -38,6 +38,7 @@ from event_hub import EventHub
 from engines.tools_poisoning_engine import ToolsPoisoningEngine
 from engines.command_injection_engine import CommandInjectionEngine
 from engines.file_system_exposure_engine import FileSystemExposureEngine
+from engines.pii_filter_engine import PIIFilterEngine
 
 # WebSocket handler
 from websocket_handler import ws_handler
@@ -70,6 +71,14 @@ def setup_engines(db: Database) -> list:
             engines.append(engine)
         except Exception as e:
             safe_print(f"[Engine] Failed to initialize FileSystemExposureEngine: {e}")
+
+    # PII Filter Engine
+    if config.get_pii_filter_enabled():
+        try:
+            engine = PIIFilterEngine(db)
+            engines.append(engine)
+        except Exception as e:
+            safe_print(f"[Engine] Failed to initialize PIIFilterEngine: {e}")
 
     return engines
 
