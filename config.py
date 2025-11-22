@@ -15,7 +15,7 @@ class Config:
 
     def __init__(self, config_file: str = 'config.conf'):
         # Observer settings (from environment variables)
-        self.server_port = int(os.getenv('MCP_PROXY_PORT', '28173'))
+        self.server_port = int(os.getenv('MCP_PROXY_PORT', '8282'))
         self.server_host = os.getenv('MCP_PROXY_HOST', '127.0.0.1')
         self.debug = os.getenv('MCP_DEBUG', 'false').lower() == 'true'
         self.scan_mode = os.getenv('MCP_SCAN_MODE', 'REQUEST_RESPONSE')

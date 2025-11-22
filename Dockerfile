@@ -22,7 +22,7 @@ RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 
 # Expose HTTP server port
-EXPOSE 28173
+EXPOSE 8282
 
 # Run unified server
 CMD ["python", "server.py"]
