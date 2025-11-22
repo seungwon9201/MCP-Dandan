@@ -365,9 +365,22 @@ class ClaudeConfigFinder:
                 # Cursor config structure: command, args, env (similar to Claude)
                 # But also supports: url, headers (for remote MCP servers)
 
-                # Skip remote servers (with url)
+                # Handle remote servers (with url)
                 if 'url' in server_config:
-                    logger.info(f"[Skip] '{server_name}' is a remote server (url-based)")
+                    current_url = server_config['url']
+
+                    # Skip if already proxied
+                    if 'localhost:8282' in current_url or '127.0.0.1:8282' in current_url:
+                        logger.info(f"[Skip] '{server_name}' already uses proxy URL")
+                        continue
+
+                    # Build proxy URL: http://localhost:8282/Cursor/{server_name}?target={original_url}
+                    from urllib.parse import quote
+                    proxy_url = f"http://localhost:8282/Cursor/{server_name}?target={quote(current_url, safe='')}"
+                    server_config['url'] = proxy_url
+
+                    logger.info(f"[Modified] '{server_name}' - url: {proxy_url}")
+                    modified_count += 1
                     continue
 
                 if 'command' not in server_config:
