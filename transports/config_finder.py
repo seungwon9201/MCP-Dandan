@@ -53,6 +53,8 @@ class ClaudeConfigFinder:
 
     def __init__(self, proxy_path: Optional[str] = None):
         self.proxy_path = proxy_path or self._build_proxy_path()
+        # Use python3 on macOS/Linux, python on Windows
+        self.python_cmd = 'python' if platform.system() == 'Windows' else 'python3'
 
     def configure_all_proxies(self) -> bool:
         """Configure both Claude and Cursor proxies"""
@@ -354,14 +356,14 @@ class ClaudeConfigFinder:
                 new_args = [self.proxy_path, current_command] + existing_args
                 server_config['args'] = new_args
 
-                # Set command to "python"
-                server_config['command'] = 'python'
+                # Set command to python/python3 based on OS
+                server_config['command'] = self.python_cmd
 
                 # Add/update environment variables
                 existing_env = server_config.get('env', {})
                 server_config['env'] = self._modified_env(server_name, existing_env, app_name)
 
-                logger.info(f"[Modified] '{server_name}' - command: python, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
+                logger.info(f"[Modified] '{server_name}' - command: {self.python_cmd}, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
                 modified_count += 1
 
             # Save modified config
@@ -453,14 +455,14 @@ class ClaudeConfigFinder:
                 new_args = [self.proxy_path, current_command] + existing_args
                 server_config['args'] = new_args
 
-                # Set command to "python"
-                server_config['command'] = 'python'
+                # Set command to python/python3 based on OS
+                server_config['command'] = self.python_cmd
 
                 # Add/update environment variables
                 existing_env = server_config.get('env', {})
                 server_config['env'] = self._modified_env(server_name, existing_env, 'Cursor')
 
-                logger.info(f"[Modified] '{server_name}' - command: python, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
+                logger.info(f"[Modified] '{server_name}' - command: {self.python_cmd}, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
                 modified_count += 1
 
             # Save modified config
