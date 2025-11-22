@@ -28,7 +28,9 @@ function restoreConfigFiles() {
     const projectRoot = path.join(__dirname, '..', '..')
     const configFinderPath = path.join(projectRoot, 'transports', 'config_finder.py')
 
-    execSync(`python "${configFinderPath}" --restore`, {
+    // Use python3 on macOS/Linux, python on Windows
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3'
+    execSync(`${pythonCmd} "${configFinderPath}" --restore`, {
       cwd: projectRoot,
       stdio: 'pipe',
       timeout: 10000
