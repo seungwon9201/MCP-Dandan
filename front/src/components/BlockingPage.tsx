@@ -28,14 +28,23 @@ interface BlockingRequestData {
   tool_name: string
 }
 
-// 전체 타임(초 단위) – 기존 값에 맞춰 600000으로 둠
-const TOTAL_TIME = 600000
+// 전체 타임(초 단위) – 기존 값에 맞춰 60으로 둠
+const TOTAL_TIME = 60
 
 function BlockingPage() {
   const [blockingData, setBlockingData] = useState<BlockingRequestData | null>(null)
   const [timeLeft, setTimeLeft] = useState(TOTAL_TIME)
   const [loading, setLoading] = useState(true)
   const [showDetails, setShowDetails] = useState(false)
+
+  // Resize window when switching views
+  useEffect(() => {
+    if (showDetails) {
+      window.electronAPI.resizeBlockingWindow(600, 600)
+    } else {
+      window.electronAPI.resizeBlockingWindow(400, 350)
+    }
+  }, [showDetails])
 
   // Fetch blocking data from main process
   useEffect(() => {
@@ -388,11 +397,21 @@ function BlockingPage() {
         </div>
       </div>
 
+      {/* Timer Bar */}
+      <div className="w-full bg-red-100 h-2 overflow-hidden">
+        <div
+          className="h-2 bg-red-500 transition-[width] duration-1000 ease-linear"
+          style={{
+            width: `${Math.max(0, Math.min(100, (timeLeft / TOTAL_TIME) * 100))}%`,
+          }}
+        />
+      </div>
+
       {/* Actions */}
       <div className="bg-gray-50 px-2 py-1.5 md:px-4 md:py-3 flex gap-1.5 md:gap-3 border-t shrink-0">
         <button
           onClick={() => handleDecision('block')}
-          className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-1.5 px-2 md:py-2.5 md:px-4 rounded transition-all flex items-center justify-center gap-1 text-[9px] md:text-sm"
+          className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-semibold py-2.5 px-2 md:py-2.5 md:px-4 rounded transition-all flex items-center justify-center gap-1 text-[11px] md:text-sm"
         >
           <svg className="w-2.5 h-2.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -401,7 +420,7 @@ function BlockingPage() {
         </button>
         <button
           onClick={() => handleDecision('allow')}
-          className="flex-1 bg-white hover:bg-gray-100 text-gray-700 font-semibold py-1.5 px-2 md:py-2.5 md:px-4 rounded transition-all border border-gray-300 hover:border-gray-400 flex items-center justify-center gap-1 text-[9px] md:text-sm"
+          className="flex-1 bg-white hover:bg-gray-100 text-gray-700 font-semibold py-1.5 px-2 md:py-2.5 md:px-4 rounded transition-all border border-gray-300 hover:border-gray-400 flex items-center justify-center gap-1 text-[11px] md:text-sm"
         >
           <svg className="w-2.5 h-2.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

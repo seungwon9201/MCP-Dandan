@@ -687,3 +687,12 @@ ipcMain.handle('blocking:close', () => {
     blockingWindow.close()
   }
 })
+
+// Resize blocking window
+ipcMain.handle('blocking:resize', (_event, width: number, height: number) => {
+  console.log(`[IPC] blocking:resize called: ${width}x${height}`)
+  if (blockingWindow && !blockingWindow.isDestroyed()) {
+    blockingWindow.setSize(width, height)
+    blockingWindow.center()
+  }
+})
