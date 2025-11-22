@@ -8,10 +8,10 @@ services:
       - ./schema.sql:/app/schema.sql
       - ./.env:/app/.env          # Environment variables (optional)
     ports:
-      - "28173:28173"             # Observer HTTP server
+      - "8282:8282"             # Observer HTTP server
     environment:
       - PYTHONUNBUFFERED=1
-      - MCP_PROXY_PORT=28173
+      - MCP_PROXY_PORT=8282
       - MCP_PROXY_HOST=0.0.0.0
     restart: unless-stopped
     networks:

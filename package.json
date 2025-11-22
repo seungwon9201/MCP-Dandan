@@ -9,7 +9,7 @@
     "front": "cd front && npm run dev",
     "restore-config": "python ./transports/config_finder.py --restore",
     "install-all": "pip install -r requirements.txt && npm install && cd front && npm install",
-    "kill-server": "FOR /F \"tokens=5\" %P IN ('netstat -ano ^| findstr :28173 ^| findstr LISTENING') DO taskkill /PID %P /F"
+    "kill-server": "FOR /F \"tokens=5\" %P IN ('netstat -ano ^| findstr :8282 ^| findstr LISTENING') DO taskkill /PID %P /F"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

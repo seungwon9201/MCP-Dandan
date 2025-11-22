@@ -24,7 +24,7 @@ if sys.stdout.encoding != 'utf-8':
 # Configuration
 CONFIG = {
     'debug': os.getenv('MCP_DEBUG', 'false').lower() == 'true',
-    'proxy_port': int(os.getenv('MCP_PROXY_PORT', '28173')),
+    'proxy_port': int(os.getenv('MCP_PROXY_PORT', '8282')),
     'proxy_host': os.getenv('MCP_PROXY_HOST', '127.0.0.1'),
     'app_name': os.getenv('MCP_OBSERVER_APP_NAME', 'unknown'),
     'server_name': os.getenv('MCP_OBSERVER_SERVER_NAME', 'unknown'),

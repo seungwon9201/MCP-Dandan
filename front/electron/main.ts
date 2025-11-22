@@ -42,16 +42,16 @@ function restoreConfigFiles() {
 // Kill backend server function
 function killBackendServer() {
   try {
-    console.log('[Electron] Killing backend server on port 28173...')
+    console.log('[Electron] Killing backend server on port 8282...')
     if (process.platform === 'win32') {
       // Windows
-      execSync('FOR /F "tokens=5" %P IN (\'netstat -ano ^| findstr :28173 ^| findstr LISTENING\') DO taskkill /PID %P /F', {
+      execSync('FOR /F "tokens=5" %P IN (\'netstat -ano ^| findstr :8282 ^| findstr LISTENING\') DO taskkill /PID %P /F', {
         shell: 'cmd.exe',
         stdio: 'ignore'
       })
     } else {
       // macOS/Linux
-      execSync('lsof -ti:28173 | xargs kill -9', { stdio: 'ignore' })
+      execSync('lsof -ti:8282 | xargs kill -9', { stdio: 'ignore' })
     }
     console.log('[Electron] Backend server killed successfully')
   } catch (error) {
@@ -202,7 +202,7 @@ async function waitForBackend(): Promise<boolean> {
 
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      const response = await fetch('http://localhost:28173/health')
+      const response = await fetch('http://localhost:8282/health')
       if (response.ok) {
         console.log('[Electron] Backend server is ready')
         return true
@@ -224,7 +224,7 @@ async function waitForBackend(): Promise<boolean> {
 let isQuitting = false
 
 function connectWebSocket() {
-  const wsUrl = 'ws://localhost:28173/ws'
+  const wsUrl = 'ws://localhost:8282/ws'
   console.log(`[WebSocket] Connecting to ${wsUrl}...`)
 
   wsClient = new WebSocket(wsUrl)

@@ -25,7 +25,7 @@ cp config.conf.example config.conf
 python server.py
 ```
 
-Server will start on `http://127.0.0.1:28173`
+Server will start on `http://127.0.0.1:8282`
 
 ## Architecture
 
@@ -139,7 +139,7 @@ All engines run in parallel for each event:
 
 ### Environment Variables (Observer)
 ```bash
-export MCP_PROXY_PORT=28173
+export MCP_PROXY_PORT=8282
 export MCP_PROXY_HOST=127.0.0.1
 export MCP_SCAN_MODE=REQUEST_RESPONSE
 export MCP_DEBUG=false
@@ -224,7 +224,7 @@ Engine system initialized successfully
 ================================================================================
 
 [Observer] Starting HTTP server...
-[Observer] Listening on http://127.0.0.1:28173
+[Observer] Listening on http://127.0.0.1:8282
 [Observer] Scan mode: REQUEST_RESPONSE
 
 ================================================================================

@@ -72,7 +72,7 @@ Write-Host "========================================"
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "========================================"
 Write-Host ""
-Write-Host "HTTP Server: http://localhost:28173"
+Write-Host "HTTP Server: http://localhost:8282"
 Write-Host "Database Path: .\data\mcp_observer.db"
 Write-Host ""
 Write-Host "Commands:"
