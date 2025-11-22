@@ -18,11 +18,17 @@ Usage:
 import json
 import os
 import sys
-import winreg
+import platform
 import argparse
 from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
+
+# Windows-only import
+if platform.system() == 'Windows':
+    import winreg
+else:
+    winreg = None
 
 # Force UTF-8 encoding for stdin/stdout to handle Unicode properly
 # This prevents encoding issues on Windows (cp949) and other systems
@@ -47,6 +53,8 @@ class ClaudeConfigFinder:
 
     def __init__(self, proxy_path: Optional[str] = None):
         self.proxy_path = proxy_path or self._build_proxy_path()
+        # Use python3 on macOS/Linux, python on Windows
+        self.python_cmd = 'python' if platform.system() == 'Windows' else 'python3'
 
     def configure_all_proxies(self) -> bool:
         """Configure both Claude and Cursor proxies"""
@@ -100,36 +108,56 @@ class ClaudeConfigFinder:
 
     def find_claude_config(self) -> Optional[str]:
         """Find Claude Desktop config file"""
-        # [1] Default path search (Claude Targeting)
-        base_paths = [
-            os.path.join(os.environ.get('APPDATA', ''), 'Claude', 'claude_desktop_config.json'),
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Claude', 'claude_desktop_config.json'),
-            os.path.join(os.environ.get('PROGRAMFILES', ''), 'Claude', 'claude_desktop_config.json'),
-            os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Claude', 'claude_desktop_config.json'),
-        ]
+        # [1] Default path search (platform-specific)
+        system = platform.system()
+        base_paths = []
+
+        if system == 'Windows':
+            base_paths = [
+                os.path.join(os.environ.get('APPDATA', ''), 'Claude', 'claude_desktop_config.json'),
+                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Claude', 'claude_desktop_config.json'),
+                os.path.join(os.environ.get('PROGRAMFILES', ''), 'Claude', 'claude_desktop_config.json'),
+                os.path.join(os.environ.get('PROGRAMFILES(X86)', ''), 'Claude', 'claude_desktop_config.json'),
+            ]
+        elif system == 'Darwin':  # macOS
+            base_paths = [
+                os.path.expanduser('~/Library/Application Support/Claude/claude_desktop_config.json'),
+            ]
+        else:  # Linux
+            base_paths = [
+                os.path.expanduser('~/.config/Claude/claude_desktop_config.json'),
+                os.path.expanduser('~/.claude/claude_desktop_config.json'),
+            ]
 
         for path in base_paths:
             if path and os.path.isfile(path):
                 logger.info(f"[Found] Config in default path: {path}")
                 return path
 
-        # [2] Registry search
-        reg_path = self._find_from_registry()
-        if reg_path:
-            config_candidate = os.path.join(reg_path, 'claude_desktop_config.json')
-            if os.path.isfile(config_candidate):
-                logger.info(f"[Found] Config via registry: {config_candidate}")
-                return config_candidate
+        # [2] Registry search (Windows only)
+        if system == 'Windows':
+            reg_path = self._find_from_registry()
+            if reg_path:
+                config_candidate = os.path.join(reg_path, 'claude_desktop_config.json')
+                if os.path.isfile(config_candidate):
+                    logger.info(f"[Found] Config via registry: {config_candidate}")
+                    return config_candidate
 
         # [3] User directory recursive search
         user_dir = os.path.expanduser('~')
         try:
+            # Platform-specific directories to skip
+            skip_dirs = {'node_modules', '.git', 'Downloads'}
+            if system == 'Windows':
+                skip_dirs.update({'AppData\\Local\\Temp', 'AppData\\Local\\Microsoft'})
+            elif system == 'Darwin':
+                skip_dirs.update({'Library/Caches', 'Library/Logs'})
+            else:
+                skip_dirs.update({'.cache', '.local/share/Trash'})
+
             for root, dirs, files in os.walk(user_dir):
                 # Skip some common large directories to speed up search
-                dirs[:] = [d for d in dirs if d not in {
-                    'node_modules', '.git', 'AppData\\Local\\Temp',
-                    'AppData\\Local\\Microsoft', 'Downloads'
-                }]
+                dirs[:] = [d for d in dirs if d not in skip_dirs]
 
                 if 'claude_desktop_config.json' in files:
                     found_path = os.path.join(root, 'claude_desktop_config.json')
@@ -142,6 +170,8 @@ class ClaudeConfigFinder:
 
     def find_cursor_config(self) -> Optional[str]:
         """Find Cursor MCP config file"""
+        system = platform.system()
+
         # [1] Current working directory
         cwd_path = os.path.join(os.getcwd(), '.cursor', 'mcp.json')
         if os.path.isfile(cwd_path):
@@ -154,11 +184,21 @@ class ClaudeConfigFinder:
             logger.info(f"[Found] Cursor config in home: {home_cursor_path}")
             return home_cursor_path
 
-        # [3] Common Cursor locations
-        base_paths = [
-            os.path.join(os.environ.get('APPDATA', ''), 'Cursor', '.cursor', 'mcp.json'),
-            os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Cursor', '.cursor', 'mcp.json'),
-        ]
+        # [3] Common Cursor locations (platform-specific)
+        base_paths = []
+        if system == 'Windows':
+            base_paths = [
+                os.path.join(os.environ.get('APPDATA', ''), 'Cursor', '.cursor', 'mcp.json'),
+                os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Cursor', '.cursor', 'mcp.json'),
+            ]
+        elif system == 'Darwin':  # macOS
+            base_paths = [
+                os.path.expanduser('~/Library/Application Support/Cursor/mcp.json'),
+            ]
+        else:  # Linux
+            base_paths = [
+                os.path.expanduser('~/.config/Cursor/mcp.json'),
+            ]
 
         for path in base_paths:
             if path and os.path.isfile(path):
@@ -168,12 +208,18 @@ class ClaudeConfigFinder:
         # [4] Recursive search from home directory
         user_dir = os.path.expanduser('~')
         try:
+            # Platform-specific directories to skip
+            skip_dirs = {'node_modules', '.git', 'Downloads'}
+            if system == 'Windows':
+                skip_dirs.update({'AppData\\Local\\Temp', 'AppData\\Local\\Microsoft'})
+            elif system == 'Darwin':
+                skip_dirs.update({'Library/Caches', 'Library/Logs'})
+            else:
+                skip_dirs.update({'.cache', '.local/share/Trash'})
+
             for root, dirs, files in os.walk(user_dir):
                 # Skip large directories
-                dirs[:] = [d for d in dirs if d not in {
-                    'node_modules', '.git', 'AppData\\Local\\Temp',
-                    'AppData\\Local\\Microsoft', 'Downloads'
-                }]
+                dirs[:] = [d for d in dirs if d not in skip_dirs]
 
                 if '.cursor' in dirs:
                     config_candidate = os.path.join(root, '.cursor', 'mcp.json')
@@ -186,6 +232,9 @@ class ClaudeConfigFinder:
         return None
 
     def _find_from_registry(self) -> Optional[str]:
+        """Find Claude installation path from Windows registry (Windows only)"""
+        if winreg is None:
+            return None
 
         registry_roots = [
             (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Uninstall"),
@@ -307,14 +356,14 @@ class ClaudeConfigFinder:
                 new_args = [self.proxy_path, current_command] + existing_args
                 server_config['args'] = new_args
 
-                # Set command to "python"
-                server_config['command'] = 'python'
+                # Set command to python/python3 based on OS
+                server_config['command'] = self.python_cmd
 
                 # Add/update environment variables
                 existing_env = server_config.get('env', {})
                 server_config['env'] = self._modified_env(server_name, existing_env, app_name)
 
-                logger.info(f"[Modified] '{server_name}' - command: python, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
+                logger.info(f"[Modified] '{server_name}' - command: {self.python_cmd}, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
                 modified_count += 1
 
             # Save modified config
@@ -406,14 +455,14 @@ class ClaudeConfigFinder:
                 new_args = [self.proxy_path, current_command] + existing_args
                 server_config['args'] = new_args
 
-                # Set command to "python"
-                server_config['command'] = 'python'
+                # Set command to python/python3 based on OS
+                server_config['command'] = self.python_cmd
 
                 # Add/update environment variables
                 existing_env = server_config.get('env', {})
                 server_config['env'] = self._modified_env(server_name, existing_env, 'Cursor')
 
-                logger.info(f"[Modified] '{server_name}' - command: python, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
+                logger.info(f"[Modified] '{server_name}' - command: {self.python_cmd}, args: [cli_proxy.py, {current_command}, ...], env: MCP_OBSERVER_*")
                 modified_count += 1
 
             # Save modified config
