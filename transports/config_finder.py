@@ -576,9 +576,8 @@ class ClaudeConfigFinder:
                     new_env['MCP_TARGET_URL'] = current_url
 
                     # If there were custom headers, add them to env
-                    # (You might need to handle these specially depending on the remote server)
                     if existing_headers:
-                        # Store original headers in case they're needed for debugging
+                        new_env['MCP_TARGET_HEADERS'] = json.dumps(existing_headers)
                         logger.debug(f"[Info] Original headers for '{server_name}': {existing_headers}")
 
                     server_config['env'] = new_env
