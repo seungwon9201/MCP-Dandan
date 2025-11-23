@@ -405,7 +405,7 @@ function getMcpServersFromDB() {
         server.tools.push({
           name: row.tool,
           description: row.tool_description || '',
-          safety: row.safety || 0  // 0: 검사 전, 1: 안전, 2: 위험
+          safety: row.safety || 0  // 0: 검사 전, 1: 안전, 2: 조치권장, 3: 조치필요
         })
       }
     })
@@ -414,12 +414,14 @@ function getMcpServersFromDB() {
     const servers = Array.from(serverMap.values()).map((server: any) => {
       const tools = server.tools as any[]
       const hasUnchecked = tools.some((t: any) => t.safety === 0)
-      const hasDangerous = tools.some((t: any) => t.safety === 2)
+      const hasActionRequired = tools.some((t: any) => t.safety === 3)  // 조치필요
+      const hasActionRecommended = tools.some((t: any) => t.safety === 2)  // 조치권장
 
       return {
         ...server,
         isChecking: hasUnchecked,  // 검사 중인 도구가 있는가
-        hasDanger: hasDangerous     // 위험한 도구가 있는가
+        hasDanger: hasActionRequired,  // 조치필요 도구가 있는가
+        hasWarning: hasActionRecommended  // 조치권장 도구가 있는가
       }
     })
 
@@ -700,5 +702,29 @@ ipcMain.handle('blocking:resize', (_event, width: number, height: number) => {
   if (blockingWindow && !blockingWindow.isDestroyed()) {
     blockingWindow.setSize(width, height)
     blockingWindow.center()
+  }
+})
+
+// Update tool safety manually
+ipcMain.handle('api:tool:update-safety', async (_event, mcpTag: string, toolName: string, safety: number) => {
+  console.log(`[IPC] api:tool:update-safety called: ${mcpTag}/${toolName} -> ${safety}`)
+
+  try {
+    const response = await fetch('http://127.0.0.1:8282/tools/safety/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mcp_tag: mcpTag,
+        tool_name: toolName,
+        safety: safety
+      })
+    })
+
+    const result = await response.json()
+    console.log(`[IPC] Safety update result:`, result)
+    return result.success === true
+  } catch (error) {
+    console.error(`[IPC] Failed to update tool safety:`, error)
+    return false
   }
 })

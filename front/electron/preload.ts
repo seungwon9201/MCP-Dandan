@@ -32,6 +32,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeBlockingWindow: () => ipcRenderer.invoke('blocking:close'),
   resizeBlockingWindow: (width: number, height: number) => ipcRenderer.invoke('blocking:resize', width, height),
 
+  // Tool safety API
+  updateToolSafety: (mcpTag: string, toolName: string, safety: number) =>
+    ipcRenderer.invoke('api:tool:update-safety', mcpTag, toolName, safety),
+
   // 필요에 따라 추가 API 노출
   platform: process.platform,
   versions: {
@@ -60,6 +64,7 @@ declare global {
       getBlockingData: () => Promise<any>
       closeBlockingWindow: () => Promise<void>
       resizeBlockingWindow: (width: number, height: number) => Promise<void>
+      updateToolSafety: (mcpTag: string, toolName: string, safety: number) => Promise<boolean>
       platform: string
       versions: {
         node: string
