@@ -478,3 +478,49 @@ class Database:
         except Exception as e:
             safe_print(f'[DB] Failed to update tool safety: {e}')
             return False
+
+    async def set_tool_safety_manual(self, mcp_tag: str, tool_name: str, safety_value: int) -> bool:
+        """
+        수동으로 safety 값을 직접 설정.
+
+        Args:
+            mcp_tag: MCP server tag
+            tool_name: Tool name
+            safety_value: Safety value (0-3)
+                0: 검사 전 (not checked)
+                1: 안전 (safe)
+                2: 조치권장 (action recommended)
+                3: 조치필요 (action required)
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        try:
+            # Validate safety value
+            if safety_value not in (0, 1, 2, 3):
+                safe_print(f'[DB] Invalid safety value: {safety_value}')
+                return False
+
+            safety_labels = {
+                0: "NOT_CHECKED",
+                1: "SAFE",
+                2: "ACTION_RECOMMENDED",
+                3: "ACTION_REQUIRED"
+            }
+
+            await self.conn.execute(
+                """
+                UPDATE mcpl
+                SET safety = ?,
+                    safety_checked_at = CURRENT_TIMESTAMP
+                WHERE mcpTag = ? AND tool = ?
+                """,
+                (safety_value, mcp_tag, tool_name)
+            )
+            await self.conn.commit()
+            safe_print(f'[DB] Manually set safety for {mcp_tag}/{tool_name}: {safety_labels[safety_value]}')
+            return True
+
+        except Exception as e:
+            safe_print(f'[DB] Failed to set tool safety manually: {e}')
+            return False

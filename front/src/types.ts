@@ -88,6 +88,7 @@ declare global {
       getEngineResults: () => Promise<any[]>
       getEngineResultsByEvent: (rawEventId: number) => Promise<any[]>
       onWebSocketUpdate: (callback: (message: any) => void) => () => void
+      updateToolSafety: (mcpTag: string, toolName: string, safety: number) => Promise<boolean>
       platform: string
       versions: {
         node: string

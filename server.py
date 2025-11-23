@@ -318,6 +318,73 @@ async def handle_get_tools_safety(request):
         )
 
 
+async def handle_update_tool_safety(request):
+    """
+    Update safety status for a specific tool manually.
+
+    Request body:
+        {
+            "mcp_tag": "server_name",
+            "tool_name": "tool_name",
+            "safety": 1  // 0-3
+        }
+
+    Response:
+        { "success": true }
+    """
+    import json
+
+    try:
+        data = await request.json()
+        mcp_tag = data.get('mcp_tag')
+        tool_name = data.get('tool_name')
+        safety = data.get('safety')
+
+        if not mcp_tag or not tool_name or safety is None:
+            return web.Response(
+                status=400,
+                text=json.dumps({"error": "mcp_tag, tool_name, and safety are required"}),
+                content_type='application/json'
+            )
+
+        if safety not in (0, 1, 2, 3):
+            return web.Response(
+                status=400,
+                text=json.dumps({"error": "safety must be 0, 1, 2, or 3"}),
+                content_type='application/json'
+            )
+
+        db = request.app.get('db')
+        if not db:
+            return web.Response(
+                status=500,
+                text=json.dumps({"error": "Database not available"}),
+                content_type='application/json'
+            )
+
+        success = await db.set_tool_safety_manual(mcp_tag, tool_name, safety)
+
+        if success:
+            return web.Response(
+                text=json.dumps({"success": True}),
+                content_type='application/json'
+            )
+        else:
+            return web.Response(
+                status=500,
+                text=json.dumps({"error": "Failed to update safety"}),
+                content_type='application/json'
+            )
+
+    except Exception as e:
+        safe_print(f"[Server] Error in handle_update_tool_safety: {e}")
+        return web.Response(
+            status=500,
+            text=json.dumps({"error": str(e)}),
+            content_type='application/json'
+        )
+
+
 def setup_routes(app):
     """Setup application routes."""
 
@@ -335,8 +402,9 @@ def setup_routes(app):
     app.router.add_post('/verify/response', handle_verify_response)
     app.router.add_post('/register-tools', handle_register_tools)
 
-    # Tools safety API endpoint
+    # Tools safety API endpoints
     app.router.add_post('/tools/safety', handle_get_tools_safety)
+    app.router.add_post('/tools/safety/update', handle_update_tool_safety)
 
     # Unified auto-detect endpoint
     # Format: /{appName}/{serverName} (GET or POST)
@@ -355,6 +423,7 @@ def setup_routes(app):
     safe_print(f"  POST /verify/response - STDIO verification API")
     safe_print(f"  POST /register-tools - Tool registration")
     safe_print(f"  POST /tools/safety - Tools safety status")
+    safe_print(f"  POST /tools/safety/update - Update tool safety manually")
     safe_print(f"  *    /{{app}}/{{server}} - Unified MCP endpoint (auto-detect)")
     safe_print(f"  POST /{{app}}/{{server}}/message - SSE message endpoint")
 
