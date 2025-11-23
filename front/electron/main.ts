@@ -405,7 +405,7 @@ function getMcpServersFromDB() {
         server.tools.push({
           name: row.tool,
           description: row.tool_description || '',
-          safety: row.safety || 0  // 0: 검사 전, 1: 안전, 2: 위험
+          safety: row.safety || 0  // 0: 검사 전, 1: 안전, 2: 조치권장, 3: 조치필요
         })
       }
     })
@@ -414,12 +414,14 @@ function getMcpServersFromDB() {
     const servers = Array.from(serverMap.values()).map((server: any) => {
       const tools = server.tools as any[]
       const hasUnchecked = tools.some((t: any) => t.safety === 0)
-      const hasDangerous = tools.some((t: any) => t.safety === 2)
+      const hasActionRequired = tools.some((t: any) => t.safety === 3)  // 조치필요
+      const hasActionRecommended = tools.some((t: any) => t.safety === 2)  // 조치권장
 
       return {
         ...server,
         isChecking: hasUnchecked,  // 검사 중인 도구가 있는가
-        hasDanger: hasDangerous     // 위험한 도구가 있는가
+        hasDanger: hasActionRequired,  // 조치필요 도구가 있는가
+        hasWarning: hasActionRecommended  // 조치권장 도구가 있는가
       }
     })
 

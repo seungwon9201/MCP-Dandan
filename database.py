@@ -432,20 +432,36 @@ class Database:
             safe_print(f'[DB] Failed to get tool safety status: {e}')
             return None
 
-    async def update_tool_safety(self, mcp_tag: str, tool_name: str, is_safe: bool) -> bool:
+    async def update_tool_safety(self, mcp_tag: str, tool_name: str, score: float) -> bool:
         """
-        Update safety status for a specific tool in mcpl table.
+        Update safety status for a specific tool in mcpl table based on score.
 
         Args:
             mcp_tag: MCP server tag
             tool_name: Tool name
-            is_safe: True for ALLOW (safety=1), False for DENY (safety=2)
+            score: LLM analysis score (0-100)
+
+        Safety values:
+            0: 검사 전 (not checked)
+            1: 안전 (safe) - score < 40
+            2: 조치권장 (action recommended) - score 40-79
+            3: 조치필요 (action required) - score >= 80
 
         Returns:
             True if update successful, False otherwise
         """
         try:
-            safety_value = 1 if is_safe else 2
+            # score 기반 safety 값 결정
+            if score >= 80:
+                safety_value = 3  # 조치필요
+                safety_label = "ACTION_REQUIRED"
+            elif score >= 40:
+                safety_value = 2  # 조치권장
+                safety_label = "ACTION_RECOMMENDED"
+            else:
+                safety_value = 1  # 안전
+                safety_label = "SAFE"
+
             await self.conn.execute(
                 """
                 UPDATE mcpl
@@ -456,7 +472,7 @@ class Database:
                 (safety_value, mcp_tag, tool_name)
             )
             await self.conn.commit()
-            safe_print(f'[DB] Updated safety for {mcp_tag}/{tool_name}: {"ALLOW" if is_safe else "DENY"}')
+            safe_print(f'[DB] Updated safety for {mcp_tag}/{tool_name}: {safety_label} (score={score})')
             return True
 
         except Exception as e:
