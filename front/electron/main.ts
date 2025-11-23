@@ -20,22 +20,26 @@ let blockingWindow: BrowserWindow | null = null
 let wsClient: any = null
 let pendingBlockingData: any = null
 
-// Restore config files before killing server
+// Disable 82ch proxy and restore config files
 function restoreConfigFiles() {
   try {
-    console.log('[Electron] Restoring original config files...')
-    // Get the project root (mcp-dandan directory)
+    console.log('[Electron] Disabling 82ch proxy and restoring config files...')
+    // Get the project root (82ch directory)
     const projectRoot = path.join(__dirname, '..', '..')
     const configFinderPath = path.join(projectRoot, 'transports', 'config_finder.py')
 
     // Use python3 on macOS/Linux, python on Windows
     const pythonCmd = process.platform === 'win32' ? 'python' : 'python3'
-    execSync(`${pythonCmd} "${configFinderPath}" --restore`, {
+
+    // Use --disable to remove proxy from local servers and delete remote servers
+    execSync(`${pythonCmd} "${configFinderPath}" --disable --app all`, {
       cwd: projectRoot,
       stdio: 'pipe',
       timeout: 10000
     })
     console.log('[Electron] Config files restored successfully')
+    console.log('[Electron] - Local servers: proxy removed')
+    console.log('[Electron] - Remote servers: deleted')
   } catch (error) {
     console.log('[Electron] Failed to restore config files:', error)
   }

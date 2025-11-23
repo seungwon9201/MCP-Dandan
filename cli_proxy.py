@@ -403,14 +403,40 @@ def main():
     """Main entry point."""
     global server_process
 
+    # Check if MCP_TARGET_URL is set (remote mode) - check BEFORE argv check
+    target_url = os.getenv('MCP_TARGET_URL')
+    if target_url:
+        log('INFO', f"Remote mode detected: {target_url}")
+        log('INFO', "Delegating to cli_remote_proxy.py")
+
+        # Import and run remote proxy
+        try:
+            import asyncio
+            from cli_remote_proxy import handle_sse_connection
+            asyncio.run(handle_sse_connection())
+            return
+        except ImportError as e:
+            log('ERROR', f"Failed to import cli_remote_proxy: {e}")
+            sys.exit(1)
+        except Exception as e:
+            log('ERROR', f"Remote proxy error: {e}")
+            sys.exit(1)
+
+    # Local STDIO mode - check argv
     if len(sys.argv) < 2:
         safe_print("Usage: python cli_proxy.py <command> [args...]", file=sys.stderr)
+        safe_print("", file=sys.stderr)
+        safe_print("For local STDIO server:", file=sys.stderr)
+        safe_print("  python cli_proxy.py npx -y @modelcontextprotocol/server-everything", file=sys.stderr)
+        safe_print("", file=sys.stderr)
+        safe_print("For remote SSE server:", file=sys.stderr)
+        safe_print("  MCP_TARGET_URL=http://example.com/sse python cli_proxy.py", file=sys.stderr)
         sys.exit(1)
 
     command = sys.argv[1]
     args = sys.argv[2:]
 
-    log('INFO', f"Starting STDIO proxy for: {command} {' '.join(args)}")
+    log('INFO', f"Local mode: {command} {' '.join(args)}")
     log('INFO', f"App: {CONFIG['app_name']}, Server: {CONFIG['server_name']}")
 
     # Start target server process
