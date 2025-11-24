@@ -727,7 +727,7 @@ function parseConfig(content: string) {
       command_injection_engine: true,
       data_exfiltration_engine: true,
       file_system_exposure_engine: true,
-      pii_filter_engine: true
+      pii_leak_engine: true
     }
   }
 
@@ -783,7 +783,7 @@ function generateConfig(config: any) {
     `command_injection_engine = ${config.Engine.command_injection_engine ? 'True' : 'False'}`,
     `data_exfiltration_engine = ${config.Engine.data_exfiltration_engine ? 'True' : 'False'}`,
     `file_system_exposure_engine = ${config.Engine.file_system_exposure_engine ? 'True' : 'False'}`,
-    `pii_filter_engine = ${config.Engine.pii_filter_engine ? 'True' : 'False'}`
+    `pii_leak_engine = ${config.Engine.pii_leak_engine ? 'True' : 'False'}`
   ]
 
   return lines.join('\n')
@@ -804,7 +804,7 @@ ipcMain.handle('config:get', () => {
           command_injection_engine: true,
           data_exfiltration_engine: true,
           file_system_exposure_engine: true,
-          pii_filter_engine: true
+          pii_leak_engine: true
         }
       }
       const content = generateConfig(defaultConfig)

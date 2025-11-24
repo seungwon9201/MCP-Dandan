@@ -37,7 +37,7 @@ const threatDefinitions: ThreatDefinition[] = [
     borderColor: 'border-yellow-200'
   },
   {
-    name: 'PII Filter',
+    name: 'PII Leak',
     description: 'Personally Identifiable Information (PII) detected in MCP tool requests.',
     icon: UserX,
     color: 'text-blue-600',
@@ -116,9 +116,9 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
           } else if (name.includes('filesystemexposure')) {
             threatType = 'Filesystem Exposure'
             console.log('Matched: Filesystem Exposure')
-          } else if (name.includes('pii') || name.includes('filter')) {
-            threatType = 'PII Filter'
-            console.log('Matched: PII Filter')
+          } else if (name.includes('pii') || name.includes('leak')) {
+            threatType = 'PII Leak'
+            console.log('Matched: PII Leak')
           } else if (name.includes('data') || name.includes('exfiltration')) {
             threatType = 'Data Exfiltration'
             console.log('Matched: Data Exfiltration')

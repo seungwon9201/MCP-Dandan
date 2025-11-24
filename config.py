@@ -46,7 +46,7 @@ tools_poisoning_engine = True
 command_injection_engine = True
 data_exfiltration_engine = True
 file_system_exposure_engine = True
-pii_filter_engine = True
+pii_leak_engine = True
 """
         with open(config_file, 'w', encoding='utf-8') as f:
             f.write(default_content)
@@ -63,8 +63,8 @@ pii_filter_engine = True
     def get_file_system_exposure_enabled(self) -> bool:
         return self.config.getboolean('Engine', 'file_system_exposure_engine', fallback=True)
 
-    def get_pii_filter_enabled(self) -> bool:
-        return self.config.getboolean('Engine', 'pii_filter_engine', fallback=True)
+    def get_pii_leak_enabled(self) -> bool:
+        return self.config.getboolean('Engine', 'pii_leak_engine', fallback=True)
 
     def get_data_exfiltration_enabled(self) -> bool:
         return self.config.getboolean('Engine', 'data_exfiltration_engine', fallback=True)

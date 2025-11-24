@@ -12,7 +12,7 @@ interface ConfigData {
     command_injection_engine: boolean
     data_exfiltration_engine: boolean
     file_system_exposure_engine: boolean
-    pii_filter_engine: boolean
+    pii_leak_engine: boolean
   }
 }
 
@@ -145,11 +145,11 @@ function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </label>
                   <label className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">PII Filter Engine</span>
+                    <span className="text-sm text-gray-600">PII Leak Engine</span>
                     <input
                       type="checkbox"
-                      checked={config.Engine.pii_filter_engine}
-                      onChange={() => handleEngineToggle('pii_filter_engine')}
+                      checked={config.Engine.pii_leak_engine}
+                      onChange={() => handleEngineToggle('pii_leak_engine')}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                     />
                   </label>
