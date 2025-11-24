@@ -180,11 +180,9 @@ app.whenReady().then(async () => {
   })
 })
 
-// 모든 윈도우가 닫히면 앱 종료 (macOS 제외)
+// 모든 윈도우가 닫히면 앱 종료 (macOS 포함)
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })
 
 // 앱이 완전히 종료될 때 - 백엔드 서버도 종료
