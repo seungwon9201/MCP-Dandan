@@ -64,6 +64,7 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
   const [detectedEvents, setDetectedEvents] = useState<DetectedEvent[]>([])
   const [threatStats, setThreatStats] = useState<Record<string, ThreatStats>>({})
   const [timelineData, setTimelineData] = useState<TimelineData[]>([])
+  const [serverStats, setServerStats] = useState<Array<{ name: string; count: number }>>([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -217,9 +218,16 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
         .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
         .map(([date, count]) => ({ date, count: count as number }))
 
+      // Build server stats (top 5 servers by detection count)
+      const topServerStats = Object.entries(serverDetectionCount)
+        .sort(([, a], [, b]) => (b as number) - (a as number))
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count: count as number }))
+
       setDetectedEvents(events)
       setThreatStats(stats)
       setTimelineData(timeline)
+      setServerStats(topServerStats)
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
     }
@@ -342,9 +350,109 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
           </div>
         </div>
 
-        {/* Detected Threats by Threat Category and Time-Series View */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Detected Threats by Threat Category</h2>
+        {/* Right Column: Charts stacked vertically */}
+        <div className="flex flex-col gap-6">
+          {/* Detected Threats per Server */}
+          <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Detected Threats per Server</h2>
+          {(() => {
+            const totalServerThreats = serverStats.reduce((sum, server) => sum + server.count, 0)
+            const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
+
+            return totalServerThreats === 0 ? (
+              <p className="text-gray-500 text-center py-3 text-sm">No detections found</p>
+            ) : (
+              <div className="h-64 flex items-center justify-center">
+                <svg width="280" height="280" viewBox="0 0 280 280">
+                  {(() => {
+                    const centerX = 140
+                    const centerY = 140
+                    const radius = 100
+                    let currentAngle = -90 // Start from top
+
+                    return (
+                      <>
+                        {serverStats.map((server, index) => {
+                          const angle = (server.count / totalServerThreats) * 360
+                          const startAngle = currentAngle
+                          const endAngle = currentAngle + angle
+
+                          // Convert to radians
+                          const startRad = (startAngle * Math.PI) / 180
+                          const endRad = (endAngle * Math.PI) / 180
+
+                          // Calculate arc points
+                          const x1 = centerX + radius * Math.cos(startRad)
+                          const y1 = centerY + radius * Math.sin(startRad)
+                          const x2 = centerX + radius * Math.cos(endRad)
+                          const y2 = centerY + radius * Math.sin(endRad)
+
+                          const largeArcFlag = angle > 180 ? 1 : 0
+
+                          const pathData = [
+                            `M ${centerX} ${centerY}`,
+                            `L ${x1} ${y1}`,
+                            `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                            'Z'
+                          ].join(' ')
+
+                          currentAngle = endAngle
+
+                          return (
+                            <path
+                              key={index}
+                              d={pathData}
+                              fill={colors[index % colors.length]}
+                              opacity="0.9"
+                              stroke="white"
+                              strokeWidth="2"
+                            />
+                          )
+                        })}
+                        {/* Center circle for donut effect */}
+                        <circle cx={centerX} cy={centerY} r="60" fill="white" />
+                        {/* Center text */}
+                        <text x={centerX} y={centerY - 5} textAnchor="middle" fontSize="20" fontWeight="bold" fill="#374151">
+                          {totalServerThreats}
+                        </text>
+                        <text x={centerX} y={centerY + 15} textAnchor="middle" fontSize="12" fill="#6B7280">
+                          Total
+                        </text>
+                      </>
+                    )
+                  })()}
+                </svg>
+                {/* Legend */}
+                <div className="ml-6 flex flex-col gap-2">
+                  {serverStats.map((server, index) => {
+                    const percentage = ((server.count / totalServerThreats) * 100).toFixed(1)
+
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-sm"
+                          style={{ backgroundColor: colors[index % colors.length] }}
+                        />
+                        <div className="text-xs">
+                          <div className="font-medium text-gray-700 truncate max-w-[120px]" title={server.name}>
+                            {server.name}
+                          </div>
+                          <div className="text-gray-500">
+                            {server.count} ({percentage}%)
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+
+        {/* Detected Threats by Threat Category */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">Detected Threats by Threat Category</h2>
           {(() => {
             const categoryData = threatDefinitions.map(threat => ({
               name: threat.name,
@@ -459,96 +567,97 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
               </div>
             )
           })()}
-
-          {/* Time-Series View */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="text-base font-semibold text-gray-800 mb-3">Time-Series View</h3>
-            {timelineData.length === 0 ? (
-              <p className="text-gray-500 text-center py-4 text-xs">No timeline data available</p>
-            ) : (
-              <div className="relative h-40">
-                <svg className="w-full h-full" viewBox="0 0 800 160" preserveAspectRatio="none">
-                  {/* Grid lines */}
-                  <line x1="40" y1="10" x2="40" y2="140" stroke="#E5E7EB" strokeWidth="1" />
-                  <line x1="40" y1="140" x2="780" y2="140" stroke="#E5E7EB" strokeWidth="1" />
-
-                  {/* Y-axis labels - only show max value */}
-                  {(() => {
-                    const maxCount = Math.max(...timelineData.map(d => d.count), 1)
-                    return (
-                      <text x="35" y="14" textAnchor="end" fontSize="10" fill="#9CA3AF">
-                        {maxCount}
-                      </text>
-                    )
-                  })()}
-
-                  {/* Line path */}
-                  {(() => {
-                    const maxCount = Math.max(...timelineData.map(d => d.count), 1)
-                    const xStep = 740 / (timelineData.length - 1 || 1)
-
-                    const points = timelineData.map((d, i) => {
-                      const x = 40 + i * xStep
-                      const y = 140 - (d.count / maxCount) * 130
-                      return `${x},${y}`
-                    }).join(' ')
-
-                    return (
-                      <>
-                        {/* Line */}
-                        <polyline
-                          points={points}
-                          fill="none"
-                          stroke="#6366F1"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-
-                        {/* Data points */}
-                        {timelineData.map((d, i) => {
-                          const x = 40 + i * xStep
-                          const y = 140 - (d.count / maxCount) * 130
-                          return (
-                            <circle
-                              key={i}
-                              cx={x}
-                              cy={y}
-                              r="2.5"
-                              fill="#6366F1"
-                            />
-                          )
-                        })}
-                      </>
-                    )
-                  })()}
-
-                  {/* X-axis labels - show only first and last */}
-                  {(() => {
-                    if (timelineData.length === 0) return null
-                    const first = timelineData[0]
-                    const last = timelineData[timelineData.length - 1]
-                    // Extract time portion (HH:MM) from "YYYY-MM-DD HH:MM"
-                    const formatTime = (timestamp: string) => {
-                      const parts = timestamp.split(' ')
-                      return parts.length === 2 ? parts[1] : timestamp
-                    }
-                    return (
-                      <>
-                        <text x="40" y="153" textAnchor="start" fontSize="9" fill="#9CA3AF">
-                          {formatTime(first.date)}
-                        </text>
-                        <text x="780" y="153" textAnchor="end" fontSize="9" fill="#9CA3AF">
-                          {formatTime(last.date)}
-                        </text>
-                      </>
-                    )
-                  })()}
-                </svg>
-              </div>
-            )}
-          </div>
         </div>
+        </div>
+      </div>
+
+      {/* Time-Series View - Full Width */}
+      <div className="bg-white rounded-lg shadow p-6 mt-6">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Time-Series View</h2>
+        {timelineData.length === 0 ? (
+          <p className="text-gray-500 text-center py-4 text-sm">No timeline data available</p>
+        ) : (
+          <div className="relative h-48">
+            <svg className="w-full h-full" viewBox="0 0 1200 200" preserveAspectRatio="none">
+              {/* Grid lines */}
+              <line x1="40" y1="10" x2="40" y2="170" stroke="#E5E7EB" strokeWidth="1" />
+              <line x1="40" y1="170" x2="1180" y2="170" stroke="#E5E7EB" strokeWidth="1" />
+
+              {/* Y-axis labels - only show max value */}
+              {(() => {
+                const maxCount = Math.max(...timelineData.map(d => d.count), 1)
+                return (
+                  <text x="35" y="14" textAnchor="end" fontSize="12" fill="#9CA3AF">
+                    {maxCount}
+                  </text>
+                )
+              })()}
+
+              {/* Line path */}
+              {(() => {
+                const maxCount = Math.max(...timelineData.map(d => d.count), 1)
+                const xStep = 1140 / (timelineData.length - 1 || 1)
+
+                const points = timelineData.map((d, i) => {
+                  const x = 40 + i * xStep
+                  const y = 170 - (d.count / maxCount) * 160
+                  return `${x},${y}`
+                }).join(' ')
+
+                return (
+                  <>
+                    {/* Line */}
+                    <polyline
+                      points={points}
+                      fill="none"
+                      stroke="#6366F1"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+
+                    {/* Data points */}
+                    {timelineData.map((d, i) => {
+                      const x = 40 + i * xStep
+                      const y = 170 - (d.count / maxCount) * 160
+                      return (
+                        <circle
+                          key={i}
+                          cx={x}
+                          cy={y}
+                          r="3"
+                          fill="#6366F1"
+                        />
+                      )
+                    })}
+                  </>
+                )
+              })()}
+
+              {/* X-axis labels - show only first and last */}
+              {(() => {
+                if (timelineData.length === 0) return null
+                const first = timelineData[0]
+                const last = timelineData[timelineData.length - 1]
+                // Extract time portion (HH:MM) from "YYYY-MM-DD HH:MM"
+                const formatTime = (timestamp: string) => {
+                  const parts = timestamp.split(' ')
+                  return parts.length === 2 ? parts[1] : timestamp
+                }
+                return (
+                  <>
+                    <text x="40" y="188" textAnchor="start" fontSize="11" fill="#9CA3AF">
+                      {formatTime(first.date)}
+                    </text>
+                    <text x="1180" y="188" textAnchor="end" fontSize="11" fill="#9CA3AF">
+                      {formatTime(last.date)}
+                    </text>
+                  </>
+                )
+              })()}
+            </svg>
+          </div>
+        )}
       </div>
     </div>
   )
