@@ -360,7 +360,9 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
             const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 
             return totalServerThreats === 0 ? (
-              <p className="text-gray-500 text-center py-3 text-sm">No detections found</p>
+              <div className="h-64 flex items-center justify-center">
+                <p className="text-gray-500 text-center text-sm">No detections found</p>
+              </div>
             ) : (
               <div className="h-64 flex items-center justify-center">
                 <svg width="280" height="280" viewBox="0 0 280 280">
@@ -374,6 +376,23 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
                       <>
                         {serverStats.map((server, index) => {
                           const angle = (server.count / totalServerThreats) * 360
+
+                          // Special case: if there's only one data point (100%), draw a full circle
+                          if (serverStats.length === 1) {
+                            return (
+                              <circle
+                                key={index}
+                                cx={centerX}
+                                cy={centerY}
+                                r={radius}
+                                fill={colors[index % colors.length]}
+                                opacity="0.9"
+                                stroke="white"
+                                strokeWidth="2"
+                              />
+                            )
+                          }
+
                           const startAngle = currentAngle
                           const endAngle = currentAngle + angle
 
@@ -471,7 +490,9 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
             }
 
             return totalThreats === 0 ? (
-              <p className="text-gray-500 text-center py-3 text-sm">No detections found</p>
+              <div className="h-64 flex items-center justify-center">
+                <p className="text-gray-500 text-center text-sm">No detections found</p>
+              </div>
             ) : (
               <div className="h-64 flex items-center justify-center">
                 <svg width="280" height="280" viewBox="0 0 280 280">
@@ -485,6 +506,29 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
                       <>
                         {categoryData.filter(cat => cat.count > 0).map((category, index) => {
                           const angle = (category.count / totalThreats) * 360
+
+                          // Get color from threat definition
+                          const threatDef = threatDefinitions.find(t => t.name === category.name)
+                          const colorClass = threatDef?.color || 'text-gray-600'
+                          const fillColor = colorMap[colorClass] || '#6B7280'
+
+                          // Special case: if there's only one data point (100%), draw a full circle
+                          const filteredCategories = categoryData.filter(cat => cat.count > 0)
+                          if (filteredCategories.length === 1) {
+                            return (
+                              <circle
+                                key={index}
+                                cx={centerX}
+                                cy={centerY}
+                                r={radius}
+                                fill={fillColor}
+                                opacity="0.9"
+                                stroke="white"
+                                strokeWidth="2"
+                              />
+                            )
+                          }
+
                           const startAngle = currentAngle
                           const endAngle = currentAngle + angle
 
@@ -508,11 +552,6 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
                           ].join(' ')
 
                           currentAngle = endAngle
-
-                          // Get color from threat definition
-                          const threatDef = threatDefinitions.find(t => t.name === category.name)
-                          const colorClass = threatDef?.color || 'text-gray-600'
-                          const fillColor = colorMap[colorClass] || '#6B7280'
 
                           return (
                             <path
