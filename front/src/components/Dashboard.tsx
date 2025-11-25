@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Shield, FileWarning, Database, UserX, LucideIcon } from 'lucide-react'
-import type { MCPServer, DetectedEvent, ThreatStats, TimelineData, TopServer } from '../types'
+import type { MCPServer, DetectedEvent, ThreatStats, TimelineData } from '../types'
 
 interface ThreatDefinition {
   name: string
@@ -62,7 +62,6 @@ interface DashboardProps {
 
 function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: DashboardProps) {
   const [detectedEvents, setDetectedEvents] = useState<DetectedEvent[]>([])
-  const [topServers, setTopServers] = useState<TopServer[]>([])
   const [threatStats, setThreatStats] = useState<Record<string, ThreatStats>>({})
   const [timelineData, setTimelineData] = useState<TimelineData[]>([])
 
@@ -132,19 +131,22 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
           console.log('No engine_name found in result:', result)
         }
 
-        // Determine severity based on severity field or score
-        let severity: 'low' | 'mid' | 'high' = result.severity || 'low'
+        // Use severity from DB directly
+        let severity: 'low' | 'mid' | 'high' = 'low'
         let severityColor = 'bg-yellow-400'
 
-        if (severity.toLowerCase() === 'high' || result.score >= 8) {
-          severity = 'high'
-          severityColor = 'bg-red-500'
-        } else if (severity.toLowerCase() === 'medium' || severity.toLowerCase() === 'mid' || result.score >= 5) {
-          severity = 'mid'
-          severityColor = 'bg-orange-400'
-        } else {
-          severity = 'low'
-          severityColor = 'bg-yellow-400'
+        if (result.severity) {
+          const severityLower = result.severity.toLowerCase()
+          if (severityLower === 'high') {
+            severity = 'high'
+            severityColor = 'bg-red-500'
+          } else if (severityLower === 'medium' || severityLower === 'mid') {
+            severity = 'mid'
+            severityColor = 'bg-orange-400'
+          } else {
+            severity = 'low'
+            severityColor = 'bg-yellow-400'
+          }
         }
 
         // Count threats
@@ -156,16 +158,8 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
         }
         threatAffectedServers[threatType].add(serverName)
 
-        // Parse event data if available
-        let description = result.detail || '—'
-        try {
-          if (result.data) {
-            const eventData = JSON.parse(result.data)
-            description = eventData.message?.params?.name || result.detail || '—'
-          }
-        } catch (e) {
-          // Keep default description
-        }
+        // Use detail from DB directly
+        const description = result.detail || '—'
 
         // Format timestamp
         const timestamp = result.created_at || new Date(result.ts).toISOString()
@@ -181,12 +175,6 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
           rawEventId: result.raw_event_id
         })
       })
-
-      // Sort servers by detection count
-      const sortedServers = Object.entries(serverDetectionCount)
-        .sort(([, a], [, b]) => (b as number) - (a as number))
-        .slice(0, 5)
-        .map(([name, count]) => ({ name, count: count as number }))
 
       // Build threat stats
       const stats: Record<string, ThreatStats> = {}
@@ -229,7 +217,6 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
         .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
         .map(([date, count]) => ({ date, count: count as number }))
 
-      setTopServers(sortedServers)
       setDetectedEvents(events)
       setThreatStats(stats)
       setTimelineData(timeline)
@@ -355,102 +342,123 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
           </div>
         </div>
 
-        {/* Top Affected Servers and Time-Series View */}
+        {/* Detected Threats by Threat Category and Time-Series View */}
         <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Top Affected Servers</h2>
-          {topServers.length === 0 ? (
-            <p className="text-gray-500 text-center py-3 text-sm">No detections found</p>
-          ) : (
-            <div className="h-64 flex items-center justify-center">
-              <svg width="280" height="280" viewBox="0 0 280 280">
-                {(() => {
-                  const total = topServers.reduce((sum, s) => sum + s.count, 0)
-                  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
-                  const centerX = 140
-                  const centerY = 140
-                  const radius = 100
-                  let currentAngle = -90 // Start from top
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Detected Threats by Threat Category</h2>
+          {(() => {
+            const categoryData = threatDefinitions.map(threat => ({
+              name: threat.name,
+              count: threatStats[threat.name]?.detections || 0,
+              color: threat.color.replace('text-', '#').replace('-600', '')
+            }))
+            const totalThreats = categoryData.reduce((sum, cat) => sum + cat.count, 0)
 
-                  return (
-                    <>
-                      {topServers.map((server, index) => {
-                        const percentage = (server.count / total) * 100
-                        const angle = (server.count / total) * 360
-                        const startAngle = currentAngle
-                        const endAngle = currentAngle + angle
+            // Map threat colors to hex values
+            const colorMap: Record<string, string> = {
+              'text-red-600': '#DC2626',
+              'text-orange-600': '#EA580C',
+              'text-yellow-600': '#CA8A04',
+              'text-blue-600': '#2563EB',
+              'text-purple-600': '#9333EA'
+            }
 
-                        // Convert to radians
-                        const startRad = (startAngle * Math.PI) / 180
-                        const endRad = (endAngle * Math.PI) / 180
+            return totalThreats === 0 ? (
+              <p className="text-gray-500 text-center py-3 text-sm">No detections found</p>
+            ) : (
+              <div className="h-64 flex items-center justify-center">
+                <svg width="280" height="280" viewBox="0 0 280 280">
+                  {(() => {
+                    const centerX = 140
+                    const centerY = 140
+                    const radius = 100
+                    let currentAngle = -90 // Start from top
 
-                        // Calculate arc points
-                        const x1 = centerX + radius * Math.cos(startRad)
-                        const y1 = centerY + radius * Math.sin(startRad)
-                        const x2 = centerX + radius * Math.cos(endRad)
-                        const y2 = centerY + radius * Math.sin(endRad)
+                    return (
+                      <>
+                        {categoryData.filter(cat => cat.count > 0).map((category, index) => {
+                          const angle = (category.count / totalThreats) * 360
+                          const startAngle = currentAngle
+                          const endAngle = currentAngle + angle
 
-                        const largeArcFlag = angle > 180 ? 1 : 0
+                          // Convert to radians
+                          const startRad = (startAngle * Math.PI) / 180
+                          const endRad = (endAngle * Math.PI) / 180
 
-                        const pathData = [
-                          `M ${centerX} ${centerY}`,
-                          `L ${x1} ${y1}`,
-                          `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-                          'Z'
-                        ].join(' ')
+                          // Calculate arc points
+                          const x1 = centerX + radius * Math.cos(startRad)
+                          const y1 = centerY + radius * Math.sin(startRad)
+                          const x2 = centerX + radius * Math.cos(endRad)
+                          const y2 = centerY + radius * Math.sin(endRad)
 
-                        currentAngle = endAngle
+                          const largeArcFlag = angle > 180 ? 1 : 0
 
-                        return (
-                          <path
-                            key={index}
-                            d={pathData}
-                            fill={colors[index % colors.length]}
-                            opacity="0.9"
-                            stroke="white"
-                            strokeWidth="2"
-                          />
-                        )
-                      })}
-                      {/* Center circle for donut effect */}
-                      <circle cx={centerX} cy={centerY} r="60" fill="white" />
-                      {/* Center text */}
-                      <text x={centerX} y={centerY - 5} textAnchor="middle" fontSize="20" fontWeight="bold" fill="#374151">
-                        {total}
-                      </text>
-                      <text x={centerX} y={centerY + 15} textAnchor="middle" fontSize="12" fill="#6B7280">
-                        Total
-                      </text>
-                    </>
-                  )
-                })()}
-              </svg>
-              {/* Legend */}
-              <div className="ml-6 flex flex-col gap-2">
-                {topServers.map((server, index) => {
-                  const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
-                  const total = topServers.reduce((sum, s) => sum + s.count, 0)
-                  const percentage = ((server.count / total) * 100).toFixed(1)
+                          const pathData = [
+                            `M ${centerX} ${centerY}`,
+                            `L ${x1} ${y1}`,
+                            `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                            'Z'
+                          ].join(' ')
 
-                  return (
-                    <div key={index} className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-sm"
-                        style={{ backgroundColor: colors[index % colors.length] }}
-                      />
-                      <div className="text-xs">
-                        <div className="font-medium text-gray-700 truncate max-w-[120px]" title={server.name}>
-                          {server.name}
-                        </div>
-                        <div className="text-gray-500">
-                          {server.count} ({percentage}%)
+                          currentAngle = endAngle
+
+                          // Get color from threat definition
+                          const threatDef = threatDefinitions.find(t => t.name === category.name)
+                          const colorClass = threatDef?.color || 'text-gray-600'
+                          const fillColor = colorMap[colorClass] || '#6B7280'
+
+                          return (
+                            <path
+                              key={index}
+                              d={pathData}
+                              fill={fillColor}
+                              opacity="0.9"
+                              stroke="white"
+                              strokeWidth="2"
+                            />
+                          )
+                        })}
+                        {/* Center circle for donut effect */}
+                        <circle cx={centerX} cy={centerY} r="60" fill="white" />
+                        {/* Center text */}
+                        <text x={centerX} y={centerY - 5} textAnchor="middle" fontSize="20" fontWeight="bold" fill="#374151">
+                          {totalThreats}
+                        </text>
+                        <text x={centerX} y={centerY + 15} textAnchor="middle" fontSize="12" fill="#6B7280">
+                          Total
+                        </text>
+                      </>
+                    )
+                  })()}
+                </svg>
+                {/* Legend */}
+                <div className="ml-6 flex flex-col gap-2">
+                  {categoryData.filter(cat => cat.count > 0).map((category, index) => {
+                    const percentage = ((category.count / totalThreats) * 100).toFixed(1)
+                    const threatDef = threatDefinitions.find(t => t.name === category.name)
+                    const colorClass = threatDef?.color || 'text-gray-600'
+                    const fillColor = colorMap[colorClass] || '#6B7280'
+
+                    return (
+                      <div key={index} className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-sm"
+                          style={{ backgroundColor: fillColor }}
+                        />
+                        <div className="text-xs">
+                          <div className="font-medium text-gray-700 truncate max-w-[120px]" title={category.name}>
+                            {category.name}
+                          </div>
+                          <div className="text-gray-500">
+                            {category.count} ({percentage}%)
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Time-Series View */}
           <div className="mt-6 pt-6 border-t border-gray-200">
