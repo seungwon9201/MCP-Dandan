@@ -33,7 +33,6 @@ class EventHub:
         self.db = db
         self.ws_handler = ws_handler  # WebSocket handler for real-time updates
         self.running = False
-        self.event_id_map = {}  # {event_ts: raw_event_id} - 이벤트와 결과 연결용
         self.background_tasks = set()  # 백그라운드 태스크 추적
 
     async def start(self):
@@ -213,8 +212,9 @@ class EventHub:
             # Save to raw_events table
             raw_event_id = await self.db.insert_raw_event(event)
 
-            if raw_event_id and 'ts' in event:
-                self.event_id_map[event['ts']] = raw_event_id
+            if raw_event_id:
+                # Store raw_event_id directly in the event for later use
+                event['_raw_event_id'] = raw_event_id
 
                 # Save to type-specific tables
                 # Proxy와 MCP 모두 JSON-RPC 프로토콜이므로 rpc_events에 저장
@@ -263,10 +263,8 @@ class EventHub:
                 result_data = result.get('result', {})
                 original_event = result_data.get('original_event', {})
 
-                # Map timestamp to raw_event_id
-                raw_event_id = None
-                if 'ts' in original_event:
-                    raw_event_id = self.event_id_map.get(original_event['ts'])
+                # Get raw_event_id directly from event
+                raw_event_id = original_event.get('_raw_event_id')
 
                 # Extract metadata
                 server_name = original_event.get('mcpTag')
@@ -299,13 +297,11 @@ class EventHub:
     async def _save_result(self, result: Dict[str, Any]):
         """Save single engine detection result to database (legacy method)."""
         try:
-            # Map original event timestamp to raw_event_id
-            raw_event_id = None
             result_data = result.get('result', {})
             original_event = result_data.get('original_event', {})
 
-            if 'ts' in original_event:
-                raw_event_id = self.event_id_map.get(original_event['ts'])
+            # Get raw_event_id directly from event
+            raw_event_id = original_event.get('_raw_event_id')
 
             # Extract server name and producer
             server_name = original_event.get('mcpTag')
@@ -342,7 +338,7 @@ class EventHub:
 
         Args:
             count: insert된 tool 개수
-            original_event: 원본 이벤트 (mcpTag, producer 추출용)
+            original_event: 원본 이벤트 (mcpTag, producer, raw_event_id 추출용)
         """
         try:
             # mcpl에서 최근 insert된 tools 조회
@@ -365,6 +361,9 @@ class EventHub:
                 safe_print(f'[EventHub] ToolsPoisoningEngine not found')
                 return
 
+            # Get raw_event_id from original event
+            parent_raw_event_id = original_event.get('_raw_event_id')
+
             # 각 tool에 대해 병렬 분석 수행
             tasks = []
             for tool_data in tools:
@@ -374,6 +373,7 @@ class EventHub:
                     'producer': tool_data.get('producer', 'unknown'),
                     'mcpTag': tool_data.get('mcpTag', 'unknown'),
                     'ts': original_event.get('ts'),  # 원본 이벤트의 timestamp 사용
+                    '_raw_event_id': parent_raw_event_id,  # 부모 이벤트의 raw_event_id 사용
                     'data': {
                         'task': 'RECV',
                         'message': {
