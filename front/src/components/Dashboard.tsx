@@ -58,17 +58,126 @@ interface DashboardProps {
   setSelectedServer: (server: MCPServer | null) => void
   servers: MCPServer[]
   setSelectedMessageId: (messageId: string | number | null) => void
+  isTutorialMode?: boolean
 }
 
-function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: DashboardProps) {
+// 튜토리얼용 샘플 데이터 생성
+const generateTutorialData = () => {
+  const now = new Date()
+  const tutorialEvents: DetectedEvent[] = [
+    {
+      serverName: 'filesystem-server',
+      threatType: 'Filesystem Exposure',
+      severity: 'high',
+      severityColor: 'bg-red-500',
+      description: 'Attempted to access /etc/passwd',
+      lastSeen: new Date(now.getTime() - 5 * 60000).toISOString().slice(0, 19).replace('T', ' '),
+      engineResultId: 1,
+      rawEventId: 101
+    },
+    {
+      serverName: 'database-server',
+      threatType: 'Command Injection',
+      severity: 'high',
+      severityColor: 'bg-red-500',
+      description: 'SQL injection pattern detected in query',
+      lastSeen: new Date(now.getTime() - 10 * 60000).toISOString().slice(0, 19).replace('T', ' '),
+      engineResultId: 2,
+      rawEventId: 102
+    },
+    {
+      serverName: 'api-server',
+      threatType: 'PII Leak',
+      severity: 'mid',
+      severityColor: 'bg-orange-400',
+      description: 'Email address detected in API request',
+      lastSeen: new Date(now.getTime() - 15 * 60000).toISOString().slice(0, 19).replace('T', ' '),
+      engineResultId: 3,
+      rawEventId: 103
+    },
+    {
+      serverName: 'mcp-tools',
+      threatType: 'Tool Poisoning',
+      severity: 'high',
+      severityColor: 'bg-red-500',
+      description: 'Suspicious tool modification detected',
+      lastSeen: new Date(now.getTime() - 20 * 60000).toISOString().slice(0, 19).replace('T', ' '),
+      engineResultId: 4,
+      rawEventId: 104
+    },
+    {
+      serverName: 'network-server',
+      threatType: 'Data Exfiltration',
+      severity: 'mid',
+      severityColor: 'bg-orange-400',
+      description: 'Large data transfer to external IP',
+      lastSeen: new Date(now.getTime() - 25 * 60000).toISOString().slice(0, 19).replace('T', ' '),
+      engineResultId: 5,
+      rawEventId: 105
+    },
+    {
+      serverName: 'filesystem-server',
+      threatType: 'Filesystem Exposure',
+      severity: 'low',
+      severityColor: 'bg-yellow-400',
+      description: 'Access to /tmp directory',
+      lastSeen: new Date(now.getTime() - 30 * 60000).toISOString().slice(0, 19).replace('T', ' '),
+      engineResultId: 6,
+      rawEventId: 106
+    }
+  ]
+
+  const tutorialThreatStats: Record<string, ThreatStats> = {
+    'Tool Poisoning': { detections: 1, affectedServers: 1 },
+    'Command Injection': { detections: 1, affectedServers: 1 },
+    'Filesystem Exposure': { detections: 2, affectedServers: 1 },
+    'PII Leak': { detections: 1, affectedServers: 1 },
+    'Data Exfiltration': { detections: 1, affectedServers: 1 }
+  }
+
+  const tutorialTimelineData: TimelineData[] = [
+    { date: new Date(now.getTime() - 30 * 60000).toISOString().slice(0, 16).replace('T', ' '), count: 1 },
+    { date: new Date(now.getTime() - 25 * 60000).toISOString().slice(0, 16).replace('T', ' '), count: 1 },
+    { date: new Date(now.getTime() - 20 * 60000).toISOString().slice(0, 16).replace('T', ' '), count: 2 },
+    { date: new Date(now.getTime() - 15 * 60000).toISOString().slice(0, 16).replace('T', ' '), count: 1 },
+    { date: new Date(now.getTime() - 10 * 60000).toISOString().slice(0, 16).replace('T', ' '), count: 3 },
+    { date: new Date(now.getTime() - 5 * 60000).toISOString().slice(0, 16).replace('T', ' '), count: 2 }
+  ]
+
+  const tutorialServerStats = [
+    { name: 'filesystem-server', count: 2 },
+    { name: 'database-server', count: 1 },
+    { name: 'api-server', count: 1 },
+    { name: 'mcp-tools', count: 1 },
+    { name: 'network-server', count: 1 }
+  ]
+
+  return {
+    events: tutorialEvents,
+    stats: tutorialThreatStats,
+    timeline: tutorialTimelineData,
+    servers: tutorialServerStats
+  }
+}
+
+function Dashboard({ setSelectedServer, servers, setSelectedMessageId, isTutorialMode = false }: DashboardProps) {
   const [detectedEvents, setDetectedEvents] = useState<DetectedEvent[]>([])
   const [threatStats, setThreatStats] = useState<Record<string, ThreatStats>>({})
   const [timelineData, setTimelineData] = useState<TimelineData[]>([])
   const [serverStats, setServerStats] = useState<Array<{ name: string; count: number }>>([])
 
   useEffect(() => {
-    fetchDashboardData()
-  }, [])
+    if (isTutorialMode) {
+      // 튜토리얼 모드에서는 샘플 데이터 사용
+      const tutorialData = generateTutorialData()
+      setDetectedEvents(tutorialData.events)
+      setThreatStats(tutorialData.stats)
+      setTimelineData(tutorialData.timeline)
+      setServerStats(tutorialData.servers)
+    } else {
+      fetchDashboardData()
+    }
+  }, [isTutorialMode])
 
   // Subscribe to WebSocket updates for real-time dashboard data
   useEffect(() => {
@@ -243,11 +352,11 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
   }
 
   return (
-    <div className="h-full overflow-auto bg-gray-50 p-6">
+    <div id="dashboard-container" className="h-full overflow-auto bg-gray-50 p-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Dashboard</h1>
 
       {/* Detected Events Table - Full Width */}
-      <div className="bg-white rounded-lg shadow mb-6">
+      <div className="bg-white rounded-lg shadow mb-6" data-tutorial="detected-table">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800">Detected Threats</h2>
         </div>
@@ -321,7 +430,7 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
       {/* Bottom Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Threat Categories */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6" data-tutorial="threat-categories">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Threat Categories</h2>
           <div className="grid grid-cols-1 gap-3">
             {threatDefinitions.map((threat) => {
@@ -353,7 +462,7 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
         {/* Right Column: Charts stacked vertically */}
         <div className="flex flex-col gap-6">
           {/* Detected Threats per Server */}
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-6" data-tutorial="server-chart">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Detected Threats per Server</h2>
           {(() => {
             const totalServerThreats = serverStats.reduce((sum, server) => sum + server.count, 0)
@@ -470,7 +579,7 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
         </div>
 
         {/* Detected Threats by Threat Category */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-lg shadow p-6" data-tutorial="category-chart">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Detected Threats by Threat Category</h2>
           {(() => {
             const categoryData = threatDefinitions.map(threat => ({
@@ -611,7 +720,7 @@ function Dashboard({ setSelectedServer, servers, setSelectedMessageId }: Dashboa
       </div>
 
       {/* Time-Series View - Full Width */}
-      <div className="bg-white rounded-lg shadow p-6 mt-6">
+      <div className="bg-white rounded-lg shadow p-6 mt-6" data-tutorial="timeline">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Time-Series View</h2>
         {timelineData.length === 0 ? (
           <p className="text-gray-500 text-center py-4 text-sm">No timeline data available</p>

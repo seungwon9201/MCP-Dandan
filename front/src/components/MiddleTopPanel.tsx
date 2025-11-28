@@ -64,7 +64,7 @@ function MiddleTopPanel({ serverInfo, onToolSafetyUpdate }: MiddleTopPanelProps)
         </div>
 
         {/* Tools List */}
-        <div>
+        <div data-tutorial="tools-list">
           <h3 className="text-xs md:text-sm font-semibold text-gray-500 mb-3">Available Tools</h3>
           <div className="space-y-3 md:space-y-4">
             {serverInfo.tools.map((tool, index) => {
@@ -103,7 +103,7 @@ function MiddleTopPanel({ serverInfo, onToolSafetyUpdate }: MiddleTopPanelProps)
               return (
                 <div key={index} className="flex">
                   {/* Clickable Border - 투명한 클릭 영역 + 보이는 바 */}
-                  <div className="relative flex-shrink-0">
+                  <div className="relative flex-shrink-0" data-tutorial={index === 0 ? "safety-bar" : undefined}>
                     <div className={`w-1 h-full ${bgColor}`} />
                     <button
                       onClick={() => handleSafetyClick(tool.name, effectiveSafety)}
