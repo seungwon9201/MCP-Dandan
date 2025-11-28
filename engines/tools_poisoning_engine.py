@@ -169,9 +169,9 @@ Output:
                 if not tool_description:
                     continue
 
-                # 캐시 확인: 이미 검사된 도구는 건너뛰기 (safety=1 or safety=2)
+                # 캐시 확인: 이미 검사된 도구는 건너뛰기 (safety=1, 2, 3)
                 safety_status = await self.db.get_tool_safety_status(mcp_tag, tool_name)
-                if safety_status in [1, 2]:
+                if safety_status in [1, 2, 3]:
                     cached_count += 1
                     safe_print(f"[ToolsPoisoningEngine] [{mcp_tag}] Tool '{tool_name}' already analyzed (safety={safety_status}), skipping...", flush=True)
                     continue

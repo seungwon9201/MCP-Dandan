@@ -44,11 +44,11 @@ const joyrideStyles = {
 }
 
 const joyrideLocale = {
-  back: '이전',
-  close: '닫기',
-  last: '완료',
-  next: '다음',
-  skip: '건너뛰기',
+  back: 'back',
+  close: 'close',
+  last: 'last',
+  next: 'next',
+  skip: 'skip',
 }
 
 function TutorialProvider({ run, type, onComplete }: TutorialProviderProps) {
