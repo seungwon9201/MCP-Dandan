@@ -711,6 +711,30 @@ ipcMain.handle('blocking:resize', (_event, width: number, height: number) => {
   }
 })
 
+// Update tool safety (manual judgment)
+ipcMain.handle('api:tool:update-safety', async (_event, mcpTag: string, toolName: string, safety: number) => {
+  console.log(`[IPC] api:tool:update-safety called: ${mcpTag}/${toolName} -> ${safety}`)
+
+  try {
+    const response = await fetch('http://127.0.0.1:8282/tools/safety/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mcp_tag: mcpTag,
+        tool_name: toolName,
+        safety: safety
+      })
+    })
+
+    const result = await response.json()
+    console.log(`[IPC] Safety update result:`, result)
+    return result.success === true
+  } catch (error) {
+    console.error(`[IPC] Failed to update tool safety:`, error)
+    return false
+  }
+})
+
 // Config file path
 function getConfigPath() {
   const projectRoot = path.join(__dirname, '..', '..')
