@@ -1,4 +1,4 @@
-# MCP-DANDAN - MCP Security Framework
+# MCP-Dandan - MCP Security Framework
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/64407558-fe51-4960-862c-05024ab1a912" width="124" height="124" />
@@ -13,7 +13,7 @@
 
 ## Overview
 
-MCP-DANDAN is an integrated monitoring service that observes MCP (Model Context Protocol) communications and detects security threats in real time. It features a modern desktop UI built with Electron for easy monitoring and management.
+MCP-Dandan is an integrated monitoring service that observes MCP (Model Context Protocol) communications and detects security threats in real time. It features a modern desktop UI built with Electron for easy monitoring and management.
 
 
 https://github.com/user-attachments/assets/02eaa237-f95d-4711-8d6b-ee31ab05468f
@@ -23,7 +23,6 @@ https://github.com/user-attachments/assets/02eaa237-f95d-4711-8d6b-ee31ab05468f
 
 - **Real-time MCP Traffic Monitoring**: Intercepts and analyzes MCP communications
 - **Multi-Engine Threat Detection**:
-  - Sensitive File Access Detection
   - Command Injection Detection
   - File System Exposure Detection
   - PII Leak Detection
