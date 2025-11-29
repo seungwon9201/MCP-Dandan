@@ -363,6 +363,10 @@ async def handle_update_tool_safety(request):
         success = await db.set_tool_safety_manual(mcp_tag, tool_name, safety)
 
         if success:
+            # Broadcast tool safety update via WebSocket
+            if ws_handler:
+                asyncio.create_task(ws_handler.broadcast_tool_safety_update(mcp_tag, tool_name, safety))
+
             return web.Response(
                 text=json.dumps({"success": True}),
                 content_type='application/json'

@@ -118,6 +118,18 @@ function App() {
           }
           break
 
+        case 'tool_safety_update':
+          // Refresh servers to update tool safety indicators
+          console.log('[App] Tool safety update received:', message.data.mcp_tag, message.data.tool_name)
+          fetchServers()
+          // If the current server matches, refresh it to update the tools list
+          if (selectedServer && message.data.mcp_tag === selectedServer.name) {
+            console.log('[App] Refreshing current server for tool safety update')
+            // Fetch servers will update the selectedServer in the list
+            fetchServers()
+          }
+          break
+
         case 'reload_all':
           // Full reload of all data
           console.log('[App] Full reload requested')
