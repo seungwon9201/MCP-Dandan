@@ -101,11 +101,12 @@ function TutorialProvider({ run, type, onComplete }: TutorialProviderProps) {
       continuous
       showSkipButton
       showProgress
+      hideCloseButton
       scrollToFirstStep={false}
       disableScrolling={false}
-      disableOverlayClose={false}
+      disableOverlayClose={true}
       disableCloseOnEsc={false}
-      spotlightClicks={false}
+      spotlightClicks={true}
       callback={handleCallback}
       styles={joyrideStyles}
       locale={joyrideLocale}

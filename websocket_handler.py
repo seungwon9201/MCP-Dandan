@@ -193,6 +193,23 @@ class WebSocketHandler:
         })
         safe_print('[WebSocket] Broadcasted reload_all')
 
+    async def broadcast_tool_safety_update(self, mcp_tag: str, tool_name: str, safety: int):
+        """
+        Notify clients that a tool's safety status has been updated.
+
+        Args:
+            mcp_tag: MCP server tag
+            tool_name: Tool name
+            safety: New safety value (0-3)
+        """
+        await self.broadcast('tool_safety_update', {
+            'mcp_tag': mcp_tag,
+            'tool_name': tool_name,
+            'safety': safety,
+            'action': 'refresh_tools'
+        })
+        safe_print(f'[WebSocket] Broadcasted tool_safety_update: {mcp_tag}/{tool_name} -> {safety}')
+
     async def broadcast_blocking_request(self, request_id: str, event_data: dict,
                                          detection_results: list, engine_name: str,
                                          severity: str, server_name: str, tool_name: str):

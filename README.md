@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 # 2. (macOS only) Install SSL certificates
 # Required if using python.org installer
-python3 install_certificates.py
+python3 mcp_python_install_certificates.py
 
 # 3. Configure (optional)
 cp config.conf.example config.conf
@@ -35,7 +35,7 @@ python server.py
 
 ```bash
 # Option 1: Use our installer script
-python3 install_certificates.py
+python3 mcp_python_install_certificates.py
 
 # Option 2: Run Python's installer
 open "/Applications/Python 3.XX/Install Certificates.command"

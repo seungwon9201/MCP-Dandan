@@ -59,33 +59,6 @@ function App() {
     fetchServers()
   }, [fetchServers])
 
-  // Start tutorial on first visit
-  useEffect(() => {
-    const tutorialCompleted = localStorage.getItem(TUTORIAL_STORAGE_KEY)
-    if (!tutorialCompleted && !loading) {
-      // Delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        setTutorialType('dashboard')
-        setRunTutorial(true)
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [loading])
-
-  // Start server view tutorial when first selecting a server
-  useEffect(() => {
-    if (selectedServer && !isTutorialMode) {
-      const serverTutorialCompleted = localStorage.getItem(TUTORIAL_SERVER_VIEW_KEY)
-      if (!serverTutorialCompleted) {
-        const timer = setTimeout(() => {
-          setTutorialType('server')
-          setRunTutorial(true)
-        }, 500)
-        return () => clearTimeout(timer)
-      }
-    }
-  }, [selectedServer, isTutorialMode])
-
   // Subscribe to WebSocket updates for real-time data
   useEffect(() => {
     const unsubscribe = window.electronAPI.onWebSocketUpdate((message: any) => {
@@ -115,6 +88,18 @@ function App() {
           fetchServers()
           if (selectedServer) {
             fetchMessages(selectedServer.id)
+          }
+          break
+
+        case 'tool_safety_update':
+          // Refresh servers to update tool safety indicators
+          console.log('[App] Tool safety update received:', message.data.mcp_tag, message.data.tool_name)
+          fetchServers()
+          // If the current server matches, refresh it to update the tools list
+          if (selectedServer && message.data.mcp_tag === selectedServer.name) {
+            console.log('[App] Refreshing current server for tool safety update')
+            // Fetch servers will update the selectedServer in the list
+            fetchServers()
           }
           break
 
@@ -323,7 +308,7 @@ function App() {
       {/* Main Content Area */}
       {selectedServer === null ? (
         /* Dashboard View */
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <Dashboard
             setSelectedServer={setSelectedServer}
             servers={displayServers}
