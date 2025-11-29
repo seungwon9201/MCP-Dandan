@@ -59,33 +59,6 @@ function App() {
     fetchServers()
   }, [fetchServers])
 
-  // Start tutorial on first visit
-  useEffect(() => {
-    const tutorialCompleted = localStorage.getItem(TUTORIAL_STORAGE_KEY)
-    if (!tutorialCompleted && !loading) {
-      // Delay to ensure DOM is ready
-      const timer = setTimeout(() => {
-        setTutorialType('dashboard')
-        setRunTutorial(true)
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [loading])
-
-  // Start server view tutorial when first selecting a server
-  useEffect(() => {
-    if (selectedServer && !isTutorialMode) {
-      const serverTutorialCompleted = localStorage.getItem(TUTORIAL_SERVER_VIEW_KEY)
-      if (!serverTutorialCompleted) {
-        const timer = setTimeout(() => {
-          setTutorialType('server')
-          setRunTutorial(true)
-        }, 500)
-        return () => clearTimeout(timer)
-      }
-    }
-  }, [selectedServer, isTutorialMode])
-
   // Subscribe to WebSocket updates for real-time data
   useEffect(() => {
     const unsubscribe = window.electronAPI.onWebSocketUpdate((message: any) => {
