@@ -101,6 +101,7 @@ function TutorialProvider({ run, type, onComplete }: TutorialProviderProps) {
       continuous
       showSkipButton
       showProgress
+      hideCloseButton
       scrollToFirstStep={false}
       disableScrolling={false}
       disableOverlayClose={false}
