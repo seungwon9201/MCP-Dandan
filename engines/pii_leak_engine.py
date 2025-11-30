@@ -6,6 +6,7 @@ import os
 
 
 class PIILeakEngine(BaseEngine):
+    """Detection engine for Personal Identifiable Information (PII) leaks using YARA rules."""
 
     def __init__(self, db):
         super().__init__(
@@ -17,7 +18,6 @@ class PIILeakEngine(BaseEngine):
 
         # Load YARA rules from external file
         try:
-            # Get the project root directory (parent of engines/)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(current_dir)
             yara_file = os.path.join(project_root, 'yara_rules', 'pii_leak_rules.yar')
@@ -26,158 +26,139 @@ class PIILeakEngine(BaseEngine):
                 raise FileNotFoundError(f"YARA rules file not found: {yara_file}")
 
             self.rules = yara.compile(filepath=yara_file)
-            safe_print(f"[PIILeakEngine] YARA rules loaded successfully from {yara_file}")
-            
+            safe_print(f"[PIILeakEngine] YARA rules loaded from {yara_file}")
+
         except Exception as e:
             safe_print(f"[PIILeakEngine] Failed to load YARA rules: {e}")
-            import traceback
-            safe_print(f"[PIILeakEngine] Traceback: {traceback.format_exc()}")
             self.rules = None
 
     def should_process(self, data: dict) -> bool:
+        """Check if this event should be processed (tools/call requests and responses)."""
         if not super().should_process(data):
             return False
 
-        if 'data' in data and isinstance(data['data'], dict):
-            mcp_data = data['data']
-            if 'message' in mcp_data and isinstance(mcp_data['message'], dict):
-                message = mcp_data['message']
-                method = message.get('method', '')
+        mcp_data = data.get('data', {})
+        message = mcp_data.get('message', {})
 
-                # tools/call Request only
-                if method == 'tools/call' and 'id' in message and 'result' not in message:
-                    return True
+        if not isinstance(message, dict):
+            return False
+
+        # Process tools/call Request
+        if message.get('method') == 'tools/call':
+            return True
+
+        # Process tools/call Response
+        if mcp_data.get('task') == 'RECV' and 'result' in message:
+            return True
 
         return False
 
     def process(self, data: Any) -> Any:
-        safe_print(f"[PIILeakEngine] Processing event")
-
+        """Process event and detect PII leaks."""
         if not self.rules:
-            safe_print(f"[PIILeakEngine] YARA rules not loaded, skipping\n")
+            safe_print("[PIILeakEngine] YARA rules not loaded, skipping")
             return None
 
-        # Extract text from tools/call request
+        # Extract and analyze text
         analysis_text = self._extract_analysis_text(data)
-
         if not analysis_text:
-            safe_print(f"[PIILeakEngine] No text to analyze\n")
             return None
 
-        safe_print(f"[PIILeakEngine] Analyzing: {analysis_text[:200]}")
+        safe_print(f"[PIILeakEngine] Analyzing: {analysis_text[:100]}...")
 
         # Detect PII using YARA
         pii_matches = self._detect_pii(analysis_text)
-
         if not pii_matches:
-            safe_print(f"[PIILeakEngine] No PII detected\n")
             return None
 
-        # Calculate severity based on matches
+        # Calculate severity and score
         severity = self._calculate_severity(pii_matches)
         score = self._calculate_score(severity, len(pii_matches))
 
-        # Build detail messages
-        details = []
-        for match in pii_matches:
-            detail_msg = f"[{match['rule']}] {match['description']}: '{match['matched_text']}'"
-            details.append(detail_msg)
+        safe_print(f"[PIILeakEngine] Detected {len(pii_matches)} PII(s): {severity} (score={score})")
 
         # Build result
-        references = []
-        if 'ts' in data:
-            references.append(f"id-{data['ts']}")
-
-        result = {
-            'reference': references,
+        return {
+            'reference': [f"id-{data['ts']}"] if 'ts' in data else [],
             'result': {
                 'detector': 'PIIFilter',
                 'severity': severity,
                 'evaluation': score,
-                'detail': details,
                 'findings': pii_matches,
                 'event_type': data.get('eventType', 'Unknown'),
-                'analysis_text': analysis_text[:500] if analysis_text else '',
                 'original_event': data
             }
         }
 
-        safe_print(f"[PIILeakEngine] PII detected! severity={severity}, score={score}, matches={len(pii_matches)}\n")
-        return result
-
     def _detect_pii(self, text: str) -> list[dict]:
         """Detect PII using YARA rules."""
-        if not self.rules:
-            return []
-
         try:
             matches = self.rules.match(data=text)
             findings = []
 
             for match in matches:
                 for string_match in match.strings:
+                    instance = string_match.instances[0]
                     findings.append({
                         'rule': match.rule,
                         'category': match.meta.get('category', 'Unknown'),
                         'description': match.meta.get('description', match.rule),
-                        'matched_text': string_match.instances[0].matched_data.decode('utf-8', errors='ignore'),
-                        'offset': string_match.instances[0].offset
+                        'matched_text': instance.matched_data.decode('utf-8', errors='ignore'),
+                        'reason': f"{match.meta.get('description', match.rule)}: {instance.matched_data.decode('utf-8', errors='ignore')}"
                     })
 
             return findings
         except Exception as e:
-            safe_print(f"[PIILeakEngine] Error during YARA matching: {e}")
+            safe_print(f"[PIILeakEngine] YARA matching error: {e}")
             return []
 
     def _extract_analysis_text(self, data: dict) -> str:
-        """Extract text from tools/call request."""
+        """Extract text from MCP request and response for analysis."""
+        mcp_data = data.get('data', {})
+        message = mcp_data.get('message', {})
+
+        if not isinstance(message, dict):
+            return ''
+
         texts = []
 
-        if 'data' in data and isinstance(data['data'], dict):
-            mcp_data = data['data']
+        # Extract from Request params
+        params = message.get('params', {})
+        if isinstance(params, dict):
+            if 'arguments' in params:
+                texts.append(str(params['arguments']))
 
-            if 'message' in mcp_data and isinstance(mcp_data['message'], dict):
-                message = mcp_data['message']
+        # Extract from Response result
+        result = message.get('result', {})
+        if isinstance(result, dict):
+            # Extract content[].text
+            content = result.get('content', [])
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict) and 'text' in item:
+                        texts.append(str(item['text']))
 
-                # Extract from params
-                if 'params' in message and isinstance(message['params'], dict):
-                    params = message['params']
-
-                    # Tool name
-                    if 'name' in params:
-                        texts.append(str(params['name']))
-
-                    # Tool arguments
-                    if 'arguments' in params:
-                        texts.append(str(params['arguments']))
+            # Extract structuredContent
+            if 'structuredContent' in result:
+                texts.append(str(result['structuredContent']))
 
         return ' '.join(texts)
 
     def _calculate_severity(self, matches: list[dict]) -> str:
-        """Calculate severity based on PII types detected."""
-        high_risk_categories = ['Financial PII', 'Medical PII']
-        medium_risk_categories = ['PII']
+        """Calculate severity based on PII category (Financial/Medical = high, PII = medium)."""
+        categories = {m['category'] for m in matches}
 
-        categories = [m['category'] for m in matches]
-
-        if any(cat in high_risk_categories for cat in categories):
+        if categories & {'Financial PII', 'Medical PII'}:
             return 'high'
-        elif any(cat in medium_risk_categories for cat in categories):
+        elif 'PII' in categories:
             return 'medium'
         else:
             return 'low'
 
     def _calculate_score(self, severity: str, findings_count: int) -> int:
-        """Calculate risk score based on severity and number of findings."""
-        base_scores = {
-            'high': 85,
-            'medium': 50,
-            'low': 20,
-            'none': 0
-        }
-
+        """Calculate risk score (0-100) based on severity and findings count."""
+        base_scores = {'high': 85, 'medium': 50, 'low': 20}
         base_score = base_scores.get(severity, 0)
-        findings_bonus = min(findings_count * 5, 15)
-        total_score = min(base_score + findings_bonus, 100)
+        findings_bonus = min(findings_count * 5, 15)  # Max +15
 
-        return total_score
+        return min(base_score + findings_bonus, 100)
