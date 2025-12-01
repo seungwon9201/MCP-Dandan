@@ -51,52 +51,8 @@ npm run dev
 The server will start on `http://127.0.0.1:8282` and the Electron desktop app will launch automatically.
 
 ## Project Structure
+<img width="4829" height="4052" alt="image" src="https://github.com/user-attachments/assets/fd4c1858-1618-4cdc-b3eb-bc2221b42a13" />
 
-```
-82ch/
-├── server.py                    # Main server entry point
-├── cli_proxy.py                 # STDIO proxy wrapper
-├── cli_remote_proxy.py          # Remote proxy handler
-│
-├── transports/                  # MCP transport handlers
-│   ├── stdio_handlers.py        # STDIO protocol handling
-│   └── config_finder.py         # Claude config management
-│
-├── engines/                     # Threat detection engines
-│   ├── base_engine.py           # Base engine interface
-│   ├── command_injection_engine.py
-│   ├── data_exfiltration_engine.py
-│   ├── file_system_exposure_engine.py
-│   ├── pii_leak_engine.py
-│   └── tools_poisoning_engine.py
-│
-├── front/                       # Electron desktop application
-│   ├── electron/                # Electron main process
-│   │   ├── main.ts              # Main process entry
-│   │   └── preload.ts           # Preload script
-│   ├── src/                     # React frontend
-│   │   ├── components/          # UI components
-│   │   │   ├── BlockingModal.tsx
-│   │   │   ├── BlockingPage.tsx
-│   │   │   ├── MiddleBottomPanel.tsx
-│   │   │   ├── MiddleTopPanel.tsx
-│   │   │   ├── RightChatPanel.tsx
-│   │   │   ├── SettingsModal.tsx
-│   │   │   └── Tutorial/        # Tutorial system
-│   │   ├── main.tsx             # React entry point
-│   │   └── types.ts             # TypeScript types
-│   └── package.json
-│
-├── verification.py              # Security verification
-├── event_hub.py                 # Event routing
-├── database.py                  # Database manager
-├── config.py                    # Configuration
-├── state.py                     # Global state
-│
-├── package.json                 # Root package config
-├── requirements.txt             # Python dependencies
-└── README.md
-```
 
 ## Detection Engines
 
