@@ -51,7 +51,8 @@ npm run dev
 The server will start on `http://127.0.0.1:8282` and the Electron desktop app will launch automatically.
 
 ## Project Structure
-<img width="4726" height="4052" alt="image" src="https://github.com/user-attachments/assets/6cf9808c-08ae-472f-9593-17fa3fbd9ee2" />
+<img width="4726" height="4052" alt="image" src="https://github.com/user-attachments/assets/b37e688a-71a2-499b-b6be-45b3bd6ac6d4" />
+
 
 
 
