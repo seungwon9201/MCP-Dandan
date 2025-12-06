@@ -1,7 +1,8 @@
 # MCP-Dandan - MCP Security Framework
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/64407558-fe51-4960-862c-05024ab1a912" width="124" height="124" />
+  <img width="124" height="124" alt="image" src="https://github.com/user-attachments/assets/679e148e-b328-4ebe-b301-d8c17f7e4e93" />
+
 </p>
 <p align="center">MCP-DANDAN</p>
 
