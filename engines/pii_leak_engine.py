@@ -198,12 +198,15 @@ class PIILeakEngine(BaseEngine):
         return ' '.join(texts)
 
     def _calculate_severity(self, matches: list[dict]) -> str:
-        """Calculate severity based on PII category (Financial/Medical = high, PII = medium)."""
+        """Calculate severity based on PII category (Financial/Medical/Custom = high, PII = medium)."""
         categories = {m['category'] for m in matches}
 
-        if categories & {'Financial PII', 'Medical PII'}:
+        # Check if any match is from a custom rule
+        has_custom = any('(custom)' in m.get('rule', '') for m in matches)
+
+        if has_custom or categories & {'Financial PII', 'Medical PII'}:
             return 'high'
-        elif 'PII' in categories:
+        elif 'PII' in categories or 'Custom' in categories:
             return 'medium'
         else:
             return 'low'
