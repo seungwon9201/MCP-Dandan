@@ -40,32 +40,32 @@ class Database:
         # always schema initalize (CREATE TABLE IF NOT EXISTS)
         await self._initialize_schema()
 
-        safe_print(f'Database 연결됨: {self.db_path}')
+        safe_print(f'Database connected: {self.db_path}')
 
     async def close(self):
         if self.conn:
             await self.conn.close()
             self.conn = None
-            safe_print('Database 연결 종료됨')
+            safe_print('Database connection closed')
 
     async def _initialize_schema(self):
         if not self.schema_path.exists():
-            safe_print(f'스키마 파일이 없습니다: {self.schema_path}')
+            safe_print(f'Schema file not found: {self.schema_path}')
             return
 
         try:
-            # 스키마 SQL 읽기
+            # Read schema SQL
             with open(self.schema_path, 'r', encoding='utf-8') as f:
                 schema_sql = f.read()
 
-            # 스키마 실행
+            # Execute schema
             await self.conn.executescript(schema_sql)
             await self.conn.commit()
 
-            safe_print(f'데이터베이스 스키마 초기화 완료')
+            safe_print(f'Database schema initialization complete')
 
         except Exception as e:
-            safe_print(f'스키마 초기화 실패: {e}')
+            safe_print(f'Schema initialization failed: {e}')
             raise
 
     async def insert_raw_event(self, event: Dict[str, Any]) -> Optional[int]:
@@ -114,7 +114,7 @@ class Database:
             return cursor.lastrowid
 
         except Exception as e:
-            safe_print(f'raw_event 저장 실패: {e}')
+            safe_print(f'Failed to save raw_event: {e}')
             return None
         
     # RPC 이벤트 저장
@@ -172,11 +172,11 @@ class Database:
                     row = await cursor.fetchone()
                     if row:
                         method = row[0]
-                        safe_print(f'[DB] Response 메시지의 method를 Request에서 찾음: {method} (id={message_id})')
+                        safe_print(f'[DB] Found method from Request for Response message: {method} (id={message_id})')
                     else:
-                        safe_print(f'[DB] Warning: Response 메시지의 Request를 찾을 수 없음 (id={message_id}, mcpTag={mcpTag})')
+                        safe_print(f'[DB] Warning: Could not find Request for Response message (id={message_id}, mcpTag={mcpTag})')
                 except Exception as e:
-                    safe_print(f'[DB] Response method 조회 실패: {e}')
+                    safe_print(f'[DB] Failed to query Response method: {e}')
 
             cursor = await self.conn.execute(
                 """
@@ -191,7 +191,7 @@ class Database:
             return cursor.lastrowid
 
         except Exception as e:
-            safe_print(f'rpc_event 저장 실패: {e}')
+            safe_print(f'Failed to save rpc_event: {e}')
             return None
 
     # 엔진 결과 저장
@@ -234,11 +234,11 @@ class Database:
             )
 
             await self.conn.commit()
-            safe_print(f'[OK] engine_result 저장 완료: id={cursor.lastrowid}')
+            safe_print(f'[OK] engine_result saved successfully: id={cursor.lastrowid}')
             return cursor.lastrowid
 
         except Exception as e:
-            safe_print(f'[ERROR] engine_result 저장 실패: {e}')
+            safe_print(f'[ERROR] Failed to save engine_result: {e}')
             import traceback
             traceback.print_exc()
             return None
@@ -261,7 +261,7 @@ class Database:
                 return [dict(zip(columns, row)) for row in rows]
 
         except Exception as e:
-            safe_print(f'[ERROR] 이벤트 조회 실패: {e}')
+            safe_print(f'[ERROR] Failed to query events: {e}')
             return []
 
     async def get_event_statistics(self) -> Dict[str, Any]:
@@ -295,7 +295,7 @@ class Database:
             return stats
 
         except Exception as e:
-            safe_print(f'통계 조회 실패: {e}')
+            safe_print(f'Failed to query statistics: {e}')
             return {}
     
     async def is_null_check(self, table_name: str) -> bool:
@@ -396,7 +396,7 @@ class Database:
                 return [dict(zip(columns, row)) for row in rows]
 
         except Exception as e:
-            safe_print(f'mcpl 조회 실패: {e}')
+            safe_print(f'Failed to query mcpl: {e}')
             return []
 
     async def get_tool_safety_status(self, mcp_tag: str, tool_name: str) -> int | None:
