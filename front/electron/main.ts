@@ -127,13 +127,13 @@ function createBlockingWindow(blockingData: any) {
     resizable: true,
     alwaysOnTop: true,
     skipTaskbar: false,
+    transparent: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
     },
-    backgroundColor: '#ffffff',
   })
 
   // Load blocking modal page
