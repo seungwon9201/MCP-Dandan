@@ -38,6 +38,10 @@ https://github.com/user-attachments/assets/928686ab-a5aa-4486-8d8e-d4a9592adc3e
 ### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/82ch/MCP-Dandan.git
+cd MCP-Dandan
+
 # Install all dependencies (Python + Node.js)
 npm run install-all
 ```
